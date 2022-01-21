@@ -19,6 +19,13 @@ include(ProcessorCount)
 processorcount(processor_count)
 if(NOT processor_count EQUAL 0)
   set(test_args PARALLEL_LEVEL ${processor_count})
+
+  # GCC may OOM with too many build jobs on the MC nodes
+  if(CTEST_BUILD_CONFIGURATION_NAME MATCHES "^gcc-"
+     AND "$ENV{configuration_slurm_constraint}" STREQUAL "mc"
+  )
+    set(build_args "-j20")
+  endif()
 endif()
 
 if(NOT "$ENV{ghprbPullId}" STREQUAL "")
@@ -50,8 +57,8 @@ ctest_update()
 ctest_submit(PARTS Update)
 ctest_configure()
 ctest_submit(PARTS Configure)
-ctest_build(TARGET install FLAGS "-k0")
-ctest_build(TARGET tests FLAGS "-k0")
+ctest_build(TARGET install FLAGS "-k0" ${build_args})
+ctest_build(TARGET tests FLAGS "-k0" ${build_args})
 ctest_submit(PARTS Build)
 ctest_test(${test_args})
 ctest_submit(PARTS Test BUILD_ID CTEST_BUILD_ID)

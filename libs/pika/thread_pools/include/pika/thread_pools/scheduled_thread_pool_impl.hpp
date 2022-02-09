@@ -131,15 +131,15 @@ namespace pika { namespace threads { namespace detail {
         os << "[pool \"" << id_.name() << "\", #" << id_.index()    //-V128
            << "] with scheduler " << sched_->Scheduler::get_scheduler_name()
            << "\n"
-           << "is running on PUs : \n";
+           << "running on PUs  : ";
         os << pika::threads::to_string(get_used_processing_units())
 #ifdef PIKA_HAVE_MAX_CPU_COUNT
            << " "
            << std::bitset<PIKA_HAVE_MAX_CPU_COUNT>(get_used_processing_units())
 #endif
            << '\n';
-        os << "on numa domains : \n" << get_numa_domain_bitmap() << '\n';
-        os << "pool offset : \n" << std::dec << this->thread_offset_ << "\n";
+        os << "on numa domains : " << get_numa_domain_bitmap() << '\n';
+        os << "pool offset     : " << std::dec << this->thread_offset_ << "\n";
     }
 
     template <typename Scheduler>

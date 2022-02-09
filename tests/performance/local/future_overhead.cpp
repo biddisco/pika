@@ -381,8 +381,8 @@ void measure_function_futures_create_thread_hierarchical_placement(
             }
         };
         auto const thread_spawn_func =
-            pika::threads::detail::thread_function_nullary<decltype(
-                spawn_func)>{spawn_func};
+            pika::threads::detail::thread_function_nullary<
+                decltype(spawn_func)>{spawn_func};
 
         pika::threads::thread_init_data init(
             pika::threads::thread_function_type(thread_spawn_func), desc, prio,
@@ -482,7 +482,7 @@ int pika_main(variables_map& vm)
                 measure_function_futures_limiting_executor(count, csv, par);
                 measure_function_futures_wait_each(count, csv, par);
                 measure_function_futures_wait_all(count, csv, par);
-                measure_function_futures_sliding_semaphore(count, csv, par);
+                //measure_function_futures_sliding_semaphore(count, csv, par);
                 measure_function_futures_for_loop(count, csv, par);
                 measure_function_futures_for_loop(count, csv, par_agg);
                 measure_function_futures_for_loop(count, csv, sched_exec_tps);

@@ -140,6 +140,7 @@ namespace pika { namespace threads { namespace policies {
             terminated_items_count_;
 
         thread_queue_init_parameters parameters_;
+        std::thread::id owner_id_;
 
         static util::internal_allocator<threads::thread_data> thread_alloc_;
 
@@ -191,7 +192,7 @@ namespace pika { namespace threads { namespace policies {
         queue_holder_thread(QueueType* bp_queue, QueueType* hp_queue,
             QueueType* np_queue, QueueType* lp_queue, std::size_t domain,
             std::size_t queue, std::size_t thread_num, std::size_t owner,
-            const thread_queue_init_parameters& init)
+            const thread_queue_init_parameters& init, std::thread::id owner_id)
           : bp_queue_(bp_queue)
           , hp_queue_(hp_queue)
           , np_queue_(np_queue)
@@ -202,6 +203,7 @@ namespace pika { namespace threads { namespace policies {
           , owner_mask_(owner)
           , terminated_items_(max_thread_count)
           , parameters_(init)
+          , owner_id_(owner_id)
         {
             rollover_counters_.data_ =
                 std::make_tuple(queue_index_, round_robin_rollover);
@@ -460,11 +462,11 @@ namespace pika { namespace threads { namespace policies {
         void create_thread_object(
             threads::thread_id_ref_type& tid, threads::thread_init_data& data)
         {
-            PIKA_ASSERT(data.stacksize >= thread_stacksize::minimal);
-            PIKA_ASSERT(data.stacksize <= thread_stacksize::nostack);
-
             std::ptrdiff_t const stacksize =
                 data.scheduler_base->get_stack_size(data.stacksize);
+
+            PIKA_ASSERT(data.stacksize >= thread_stacksize::minimal);
+            PIKA_ASSERT(data.stacksize <= thread_stacksize::maximal);
 
             thread_heap_type* heap = nullptr;
             if (stacksize == parameters_.small_stacksize_)
@@ -577,6 +579,8 @@ namespace pika { namespace threads { namespace policies {
         // ----------------------------------------------------------------
         void add_to_thread_map(threads::thread_id_type tid)
         {
+            return;
+
             scoped_lock lk(thread_map_mtx_.data_);
 
             // add a new entry in the map for this thread
@@ -613,6 +617,8 @@ namespace pika { namespace threads { namespace policies {
         // ----------------------------------------------------------------
         void remove_from_thread_map(threads::thread_id_type tid, bool dealloc)
         {
+            return;
+
             // this thread has to be in this map
             PIKA_ASSERT(thread_map_.find(tid) != thread_map_.end());
 
@@ -916,6 +922,7 @@ namespace pika { namespace threads { namespace policies {
         // ------------------------------------------------------------
         void abort_all_suspended_threads()
         {
+            throw std::runtime_error("Do we need this");
             scoped_lock lk(thread_map_mtx_.data_);
             thread_map_type::iterator end = thread_map_.end();
             for (thread_map_type::iterator it = thread_map_.begin(); it != end;

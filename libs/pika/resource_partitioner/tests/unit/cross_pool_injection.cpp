@@ -96,7 +96,7 @@ int pika_main()
     // randomly create tasks that run on a random pool
     // attach continuations to them that run on different
     // random pools
-    int const loops = 1000;
+    int const loops = 100000;
     //
     std::cout << "1: Starting HP " << loops << std::endl;
     std::atomic<int> counter(loops);
@@ -246,7 +246,7 @@ void init_resource_partitioner_handler(pika::resource::partitioner& rp,
                 threads_in_pool--;
                 if (threads_remaining-- == 0)
                 {
-                    std::cerr << "This should not happen!" << std::endl;
+                    throw std::runtime_error("This should not happen!");
                 }
             }
         }
@@ -265,19 +265,19 @@ void test_scheduler(
 int main(int argc, char* argv[])
 {
     std::vector<pika::resource::scheduling_policy> schedulers = {
-        pika::resource::scheduling_policy::local,
-        pika::resource::scheduling_policy::local_priority_fifo,
-#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
-        pika::resource::scheduling_policy::local_priority_lifo,
-#endif
-#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
-        pika::resource::scheduling_policy::abp_priority_fifo,
-        pika::resource::scheduling_policy::abp_priority_lifo,
-#endif
-        pika::resource::scheduling_policy::static_,
-        pika::resource::scheduling_policy::static_priority,
+        //        pika::resource::scheduling_policy::local,
+        //        pika::resource::scheduling_policy::local_priority_fifo,
+        //#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
+        //        pika::resource::scheduling_policy::local_priority_lifo,
+        //#endif
+        //#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
+        //        pika::resource::scheduling_policy::abp_priority_fifo,
+        //        pika::resource::scheduling_policy::abp_priority_lifo,
+        //#endif
+        //        pika::resource::scheduling_policy::static_,
+        //        pika::resource::scheduling_policy::static_priority,
         // The shared_priority scheduler sometimes hangs in this test.
-        //pika::resource::scheduling_policy::shared_priority,
+        pika::resource::scheduling_policy::shared_priority,
     };
 
     for (auto const scheduler : schedulers)

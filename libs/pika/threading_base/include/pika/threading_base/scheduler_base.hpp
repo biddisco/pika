@@ -60,6 +60,11 @@ namespace pika { namespace threads { namespace policies {
     public:
         typedef std::mutex pu_mutex_type;
 
+        virtual bool simple_scheduling_loop()
+        {
+            return false;
+        }
+
         scheduler_base(std::size_t num_threads, char const* description = "",
             thread_queue_init_parameters thread_queue_init = {},
             scheduler_mode mode = nothing_special);

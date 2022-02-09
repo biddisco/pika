@@ -65,7 +65,8 @@ namespace pika { namespace threads { namespace policies {
     class PIKA_EXPORT local_priority_queue_scheduler : public scheduler_base
     {
     public:
-        typedef std::false_type has_periodic_maintenance;
+        using has_periodic_maintenance = std::false_type;
+        using bypass_scheduling_loop_checks = std::false_type;
 
         typedef thread_queue<Mutex, PendingQueuing, StagedQueuing,
             TerminatedQueuing>

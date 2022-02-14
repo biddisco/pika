@@ -56,31 +56,31 @@ namespace pika { namespace threads { namespace policies {
         {
         }
 
-        bool push(const_reference val, bool /*other_end*/ = false)
+        bool push(const_reference val, bool other_end = false)
         {
-#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
+            if (other_end)
+            {
+                return queue_.push_right(val);
+            }
             return queue_.push_left(val);
-#else
-            return queue_.push(val);
-#endif
         }
 
-        bool push(rvalue_reference val, bool /*other_end*/ = false)
+        bool push(rvalue_reference val, bool other_end = false)
         {
-#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
+            if (other_end)
+            {
+                return queue_.push_right(PIKA_MOVE(val));
+            }
             return queue_.push_left(PIKA_MOVE(val));
-#else
-            return queue_.push(PIKA_MOVE(val));
-#endif
         }
 
-        bool pop(reference val, bool /* steal */ = true)
+        bool pop(reference val, bool other_end = false)
         {
-#if defined(PIKA_HAVE_CXX11_STD_ATOMIC_128BIT)
+            if (other_end)
+            {
+                return queue_.pop_left(val);
+            }
             return queue_.pop_right(val);
-#else
-            return queue_.pop(val);
-#endif
         }
 
         bool empty()

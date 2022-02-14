@@ -48,6 +48,10 @@ namespace pika { namespace threads {
             return *this;
         }
 
+        explicit constexpr thread_id(void*& thrd) noexcept
+          : thrd_(thrd)
+        {
+        }
         explicit constexpr thread_id(thread_id_repr const& thrd) noexcept
           : thrd_(thrd)
         {
@@ -284,7 +288,10 @@ namespace pika { namespace threads {
 
         thread_id noref() const noexcept
         {
-            return thread_id(thrd_.get());
+            thread_repr* t1 = /*static_cast<thread_repr*>*/ (thrd_.get());
+            void* t2 = reinterpret_cast<void*>(t1);
+            thread_id t3(t2);
+            return t3;
         }
 
         thread_id_repr& get() & noexcept

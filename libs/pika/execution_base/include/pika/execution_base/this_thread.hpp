@@ -106,6 +106,15 @@ namespace pika { namespace util {
         }
     }
 
+    template <typename Predicate>
+    void suspend_while(Predicate&& predicate, const char* thread_name = nullptr)
+    {
+        while (predicate())
+        {
+            pika::execution_base::this_thread::yield(thread_name);
+        }
+    }
+
     namespace detail {
         // yield_while_count yields until the predicate returns true
         // required_count times consecutively. This function is used in cases

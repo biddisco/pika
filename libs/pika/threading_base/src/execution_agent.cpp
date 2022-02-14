@@ -169,8 +169,14 @@ namespace pika { namespace threads {
 
         {
 #ifdef PIKA_HAVE_THREAD_DESCRIPTION
-            threads::detail::reset_lco_description desc(
-                id.noref(), util::thread_description(desc));
+            //            auto temp = util::thread_description(desc);
+            //            auto t2 = id.noref();
+            //            threads::detail::reset_lco_description lco_desc(
+            //                t2, temp);
+            //error_code& ec = throws;
+            //threads::set_thread_lco_description(id, desc, ec);
+            get_thread_id_data(id)->set_lco_description(desc);
+
 #endif
 #ifdef PIKA_HAVE_THREAD_BACKTRACE_ON_SUSPENSION
             threads::detail::reset_backtrace bt(id);

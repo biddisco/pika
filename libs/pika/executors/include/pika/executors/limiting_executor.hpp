@@ -30,8 +30,8 @@
 namespace pika { namespace execution { namespace experimental {
 
     // by convention the title is 7 chars (for alignment)
-    using print_on = pika::debug::enable_print<false>;
-    static constexpr print_on lim_debug("LIMEXEC");
+    template <int Level>
+    static debug::print_threshold<Level, 0> lim_debug("LIMEXEC");
 
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -54,7 +54,6 @@ namespace pika { namespace execution { namespace experimental {
             }
             ~on_exit()
             {
-                lim_debug.debug(pika::debug::str<>("Count Down"));
                 executor_.count_down();
             }
             limiting_executor const& executor_;
@@ -79,9 +78,17 @@ namespace pika { namespace execution { namespace experimental {
                 limiting_.count_up();
                 if (exceeds_upper())
                 {
-                    lim_debug.debug(pika::debug::str<>("Exceeds_upper"));
-                    pika::util::yield_while([&]() { return exceeds_lower(); });
-                    lim_debug.debug(pika::debug::str<>("Below_lower"));
+                    lim_debug<5>.debug(pika::debug::str<>("throttling_wrapper"),
+                        "Exceeds_upper");
+                    pika::util::suspend_while(
+                        [&]() {
+                            lim_debug<4>.debug(
+                                pika::debug::str<>("suspend_while"), 1);
+                            return exceeds_lower();
+                        },
+                        "suspend_while");
+                    lim_debug<5>.debug(pika::debug::str<>("throttling_wrapper"),
+                        "Below_lower");
                 }
             }
 
@@ -128,12 +135,16 @@ namespace pika { namespace execution { namespace experimental {
             {
                 if (exceeds_upper(base))
                 {
-                    lim_debug.debug(pika::debug::str<>("Exceeds_upper"),
+                    lim_debug<5>.debug(pika::debug::str<>("Exceeds_upper"),
                         "in_flight",
                         pika::debug::dec<4>(base.in_flight_estimate()));
-                    pika::util::yield_while(
-                        [&]() { return exceeds_lower(base); });
-                    lim_debug.debug(pika::debug::str<>("Below_lower"),
+                    pika::util::suspend_while([&]() {
+                        lim_debug<4>.debug(pika::debug::str<>("suspend_while"),
+                            "in_flight",
+                            pika::debug::dec<4>(base.in_flight_estimate()));
+                        return exceeds_lower(base);
+                    });
+                    lim_debug<5>.debug(pika::debug::str<>("Below_lower"),
                         "in_flight",
                         pika::debug::dec<4>(base.in_flight_estimate()));
                 }
@@ -269,7 +280,7 @@ namespace pika { namespace execution { namespace experimental {
         // drops to the lower threshold
         void wait()
         {
-            pika::util::yield_while(
+            pika::util::suspend_while(
                 [&]() { return (count_ > lower_threshold_); });
         }
 
@@ -277,7 +288,7 @@ namespace pika { namespace execution { namespace experimental {
         // wait (suspend) until all tasks launched on this executor have completed
         void wait_all()
         {
-            pika::util::yield_while([&]() { return (count_ > 0); });
+            pika::util::suspend_while([&]() { return (count_ > 0); });
         }
 
         void set_threshold(std::size_t lower, std::size_t upper)
@@ -290,11 +301,15 @@ namespace pika { namespace execution { namespace experimental {
         void count_up()
         {
             ++count_;
+            lim_debug<5>.debug(
+                pika::debug::str<>("count_up"), debug::dec<5>(count_.load()));
         }
 
         void count_down() const
         {
             --count_;
+            lim_debug<5>.debug(
+                pika::debug::str<>("count_down"), debug::dec<5>(count_.load()));
         }
 
         void set_and_wait(std::size_t lower, std::size_t upper)

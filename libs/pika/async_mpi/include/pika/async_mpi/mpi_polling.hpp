@@ -122,20 +122,21 @@ namespace pika::mpi::experimental {
             ///    so that the continuation is executed as quickly as possible
             high_priority = 0x08,
 
-            /// 2 bits control the handler method,
-            method_mask = 0x30,
+            /// 3 bits control the handler method,
+            method_mask = 0x70,
 
             /// the individual methods that are supported for dispatching continuations
             yield_while = 0x00,
             suspend_resume = 0x10,
             new_task = 0x20,
             continuation = 0x30,
+            mpi_continuation = 0x40,
 
             /// Default flags are to invoke inline, but transfer completion using a dedicated pool
             default_mode = use_pool | request_inline | high_priority | new_task,
         };
 
-        // 2 bits define continuation mode
+        // 3 bits define continuation mode
         inline handler_mode get_handler_mode(int flags)
         {
             return static_cast<handler_mode>(
@@ -176,12 +177,16 @@ namespace pika::mpi::experimental {
             case handler_mode::new_task: return "new_task"; break;
             case handler_mode::continuation: return "continuation"; break;
             case handler_mode::suspend_resume: return "suspend_resume"; break;
+            case handler_mode::mpi_continuation: return "mpi_continuation"; break;
             default: return "invalid";
             }
         }
 
         // needed by static checks when debugging
         PIKA_EXPORT int comm_world_size();
+
+        typedef int(MPIX_Continue_cb_function)(int rc, void* cb_data);
+        PIKA_EXPORT void register_mpix_continuation(MPI_Request, MPIX_Continue_cb_function*, void*);
 
     }    // namespace detail
 

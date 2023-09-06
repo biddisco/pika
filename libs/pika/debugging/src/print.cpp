@@ -77,6 +77,11 @@ namespace PIKA_DETAIL_NS_DEBUG {
     {
     }
 
+    ptr::ptr(int v)
+      : data_(reinterpret_cast<void const*>(v))
+    {
+    }
+
     std::ostream& operator<<(std::ostream& os, ptr const& d)
     {
         os << std::internal << std::hex << std::setw(14) << std::setfill('0') << d.data_;

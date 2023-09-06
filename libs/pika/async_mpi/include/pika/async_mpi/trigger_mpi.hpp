@@ -186,6 +186,28 @@ namespace pika::mpi::experimental::detail {
                                     r.op_state.status, PIKA_MOVE(r.op_state.receiver));
                                 break;
                             }
+                            case handler_mode::mpi_continuation:
+                            {
+                                MPIX_Continue_cb_function* func =
+                                    &detail::mpix_callback<operation_state>;
+                                detail::register_mpix_continuation(request, func, &r.op_state);
+                                {
+                                    PIKA_DETAIL_DP(
+                                        mpi_tran<0>, debug(str<>("MPIX"), "waiting", ptr(request)));
+                                    std::unique_lock l{r.op_state.mutex};
+                                    r.op_state.cond_var.wait(
+                                        l, [&]() { return r.op_state.completed; });
+                                }
+
+                                PIKA_DETAIL_DP(
+                                    mpi_tran<0>, debug(str<>("MPIX"), "woken", ptr(request)));
+
+                                // call set_value/set_error depending on mpi return status
+                                set_value_error_helper(
+                                    /*r.op_state.status*/ MPI_SUCCESS,
+                                    PIKA_MOVE(r.op_state.receiver));
+                                break;
+                            }
                             default: PIKA_UNREACHABLE;
                             }
                         },

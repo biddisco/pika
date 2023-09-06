@@ -114,6 +114,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
     {
         PIKA_EXPORT ptr(void const* v);
         PIKA_EXPORT ptr(std::uintptr_t v);
+        PIKA_EXPORT ptr(int v);
 
         void const* data_;
 

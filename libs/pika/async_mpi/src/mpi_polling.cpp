@@ -670,15 +670,23 @@ namespace pika::mpi::experimental {
 
         int comm_world_size() { return detail::mpi_data_.size_; }
 
-        void register_mpix_continuation(
-            MPI_Request request, MPIX_Continue_cb_function* cb_func, void* op_state)
+        void register_mpix_continuation(MPI_Request request, MPIX_Continue_cb_function* cb_func,
+            void* op_state, MPI_Request** cont_req)
         {
 #ifdef PIKA_HAS_MPIX_CONTINUATIONS
+            *cont_req = &detail::mpi_data_.mpi_continuations_request;
+            // @TODO we don't strictly need defer complete flag, but for debugging ...
             PIKA_DETAIL_DP(
                 mpi_debug<0>, debug(str<>("MPIX"), "register continuation", ptr(request)));
-            // @TODO we don't strictly need defer complete flag, but for debugging ...
-            MPIX_RESULT_CHECK(MPIX_Continue(&request, cb_func, op_state, MPIX_CONT_DEFER_COMPLETE,
-                MPI_STATUSES_IGNORE, detail::mpi_data_.mpi_continuations_request));
+            MPIX_RESULT_CHECK(MPIX_Continue(&request, cb_func, op_state,
+                MPIX_CONT_DEFER_COMPLETE | MPIX_CONT_INVOKE_FAILED, MPI_STATUSES_IGNORE,
+                detail::mpi_data_.mpi_continuations_request));
+            PIKA_DETAIL_DP(mpi_debug<0>,
+                debug(
+                    str<>("MPIX"), "mpi start", ptr(detail::mpi_data_.mpi_continuations_request)));
+            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
+// Do we actually need this? Remove when certain
+//MPIX_RESULT_CHECK(MPI_Start(&request));
 #endif
         }
 
@@ -867,12 +875,11 @@ namespace pika::mpi::experimental {
         {
             MPIX_RESULT_CHECK(MPIX_Continue_init(
                 0, MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpi_continuations_request));
+            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
             PIKA_DETAIL_DP(detail::mpi_debug<0>,
                 debug(str<>("MPIX"), "Enable", "Pool", name, "Mode",
                     mpi::experimental::detail::mode_string(mode),
                     ptr(detail::mpi_data_.mpi_continuations_request)));
-            // Do we actually need this? Remove when certain
-            MPI_Start(&detail::mpi_data_.mpi_continuations_request);
         }
 #endif
         static bool defaults_set = false;

@@ -85,6 +85,8 @@ namespace pika::mpi::experimental::detail {
             bool completed;
             pika::detail::spinlock mutex;
             pika::condition_variable cond_var;
+            // MPIX
+            MPI_Request* request;
 
             // -----------------------------------------------------------------
             // The mpi_receiver receives inputs from the previous sender,
@@ -190,7 +192,8 @@ namespace pika::mpi::experimental::detail {
                             {
                                 MPIX_Continue_cb_function* func =
                                     &detail::mpix_callback<operation_state>;
-                                detail::register_mpix_continuation(request, func, &r.op_state);
+                                detail::register_mpix_continuation(
+                                    request, func, &r.op_state, &r.op_state.request);
                                 {
                                     PIKA_DETAIL_DP(
                                         mpi_tran<0>, debug(str<>("MPIX"), "waiting", ptr(request)));

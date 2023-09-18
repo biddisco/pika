@@ -167,12 +167,16 @@ namespace pika::mpi::experimental::detail {
     template <typename OperationState>
     static int mpix_callback([[maybe_unused]] int rc, void* cb_data)
     {
-        PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("MPIX"), "callback triggered"));
+        PIKA_DETAIL_DP(mpi_tran<1>, debug(str<>("MPIX"), "callback triggered"));
         auto& op_state = *static_cast<OperationState*>(cb_data);
         // wake up the suspended thread
         {
             std::lock_guard lk(op_state.mutex);
             op_state.completed = true;
+            //            PIKA_DETAIL_DP(mpi_debug<0>,
+            //                debug(
+            //                    str<>("MPIX"), "mpi start", ptr(detail::mpi_data_.mpi_continuations_request)));
+            MPI_Start(op_state.request);
         }
         op_state.cond_var.notify_one();
         return MPI_SUCCESS;

@@ -186,7 +186,8 @@ namespace pika::mpi::experimental {
         PIKA_EXPORT int comm_world_size();
 
         typedef int(MPIX_Continue_cb_function)(int rc, void* cb_data);
-        PIKA_EXPORT void register_mpix_continuation(MPI_Request, MPIX_Continue_cb_function*, void*);
+        PIKA_EXPORT void register_mpix_continuation(
+            MPI_Request, MPIX_Continue_cb_function*, void*, MPI_Request**);
 
     }    // namespace detail
 

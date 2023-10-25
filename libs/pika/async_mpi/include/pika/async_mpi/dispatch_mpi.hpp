@@ -140,7 +140,7 @@ namespace pika::mpi::experimental::detail {
                                 static_assert(std::is_same_v<invoke_result_type, int>);
                                 status = PIKA_INVOKE(PIKA_MOVE(r.op_state.f), ts..., &request);
                             }
-                            PIKA_DETAIL_DP(mpi_tran<1>,
+                            PIKA_DETAIL_DP(mpi_tran<5>,
                                 debug(str<>("dispatch_mpi_recv"), "invoke mpi",
                                     detail::stream_name(r.op_state.stream_), ptr(request)));
 
@@ -157,8 +157,8 @@ namespace pika::mpi::experimental::detail {
                                 return;
                             }
 
-                            PIKA_DETAIL_DP(mpi_tran<1>, debug(str<>("poll_request"), ptr(request)));
-                            if (poll_request(request))
+                            PIKA_DETAIL_DP(mpi_tran<7>, debug(str<>("poll_request"), ptr(request)));
+                            if (0 && poll_request(request))
                             {
 #ifdef PIKA_HAVE_APEX
                                 apex::scoped_timer apex_invoke("pika::mpi::trigger");

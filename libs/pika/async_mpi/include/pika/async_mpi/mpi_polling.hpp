@@ -189,6 +189,9 @@ namespace pika::mpi::experimental {
         PIKA_EXPORT void register_mpix_continuation(
             MPI_Request, MPIX_Continue_cb_function*, void*, MPI_Request**);
 
+        PIKA_EXPORT void restart_mpix();
+        PIKA_EXPORT void complete_mpix();
+
     }    // namespace detail
 
     // -----------------------------------------------------------------

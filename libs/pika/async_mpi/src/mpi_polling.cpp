@@ -36,7 +36,7 @@
 #include <utility>
 #include <vector>
 
-#if __has_include(<mpi-ext.h>)
+#if /*1 || */ __has_include(<mpi-ext.h>)
 # include <mpi-ext.h>
 # define PIKA_HAS_MPIX_CONTINUATIONS
 #endif
@@ -176,6 +176,7 @@ namespace pika::mpi::experimental {
 
             // MPI continuations support (Experimental mpi extension)
             MPI_Request mpi_continuations_request{MPI_REQUEST_NULL};
+            std::atomic<int> mpix_counter{0};
         };
 
         struct initializer
@@ -389,7 +390,7 @@ namespace pika::mpi::experimental {
             if (flag)
             {
                 PIKA_DETAIL_DP(
-                    mpi_debug<1>, debug(str<>("poll_request"), "MPI_Test complete", ptr(old_req)));
+                    mpi_debug<7>, debug(str<>("poll_request"), "MPI_Test complete", ptr(old_req)));
             }
             return flag;
         }
@@ -451,6 +452,18 @@ namespace pika::mpi::experimental {
                 PIKA_DETAIL_DP(mpi_debug<1>,
                     timed(
                         mpix_deb, ptr(detail::mpi_data_.mpi_continuations_request), "Flag", flag));
+
+                //                if (flag == 0)
+                //                {
+                //                    PIKA_DETAIL_DP(mpi_debug<0>,
+                //                        debug(str<>("MPIX"), "Poll", "mpi start",
+                //                            ptr(detail::mpi_data_.mpi_continuations_request)));
+                //                    MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
+                //                    return pika::threads::detail::polling_status::busy;
+                //                }
+                //                else
+                //                    return pika::threads::detail::polling_status::idle;
+
                 return (flag == 1) ? pika::threads::detail::polling_status::idle :
                                      pika::threads::detail::polling_status::busy;
             }
@@ -681,15 +694,34 @@ namespace pika::mpi::experimental {
             MPIX_RESULT_CHECK(MPIX_Continue(&request, cb_func, op_state,
                 MPIX_CONT_DEFER_COMPLETE | MPIX_CONT_INVOKE_FAILED, MPI_STATUSES_IGNORE,
                 detail::mpi_data_.mpi_continuations_request));
-            PIKA_DETAIL_DP(mpi_debug<0>,
-                debug(
-                    str<>("MPIX"), "mpi start", ptr(detail::mpi_data_.mpi_continuations_request)));
-            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
-// Do we actually need this? Remove when certain
-//MPIX_RESULT_CHECK(MPI_Start(&request));
+            //
+            restart_mpix();
+
 #endif
         }
 
+        void complete_mpix()
+        {
+            detail::mpi_data_.mpix_counter--;
+            PIKA_DETAIL_DP(
+                mpi_debug<0>, debug(str<>("MPIX"), "counter", detail::mpi_data_.mpix_counter));
+        }
+
+        void restart_mpix()
+        {
+            static std::mutex mpix_lock;
+            std::lock_guard<std::mutex> l(mpix_lock);
+            if (detail::mpi_data_.mpix_counter < 1)
+            {
+                PIKA_DETAIL_DP(mpi_debug<0>,
+                    debug(str<>("MPIX"), "mpi start",
+                        ptr(detail::mpi_data_.mpi_continuations_request)));
+                MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
+            }
+            detail::mpi_data_.mpix_counter++;
+            PIKA_DETAIL_DP(
+                mpi_debug<0>, debug(str<>("MPIX"), "counter", detail::mpi_data_.mpix_counter));
+        }
     }    // namespace detail
 
     // -------------------------------------------------------------
@@ -875,7 +907,7 @@ namespace pika::mpi::experimental {
         {
             MPIX_RESULT_CHECK(MPIX_Continue_init(
                 0, MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpi_continuations_request));
-            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
+            //MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
             PIKA_DETAIL_DP(detail::mpi_debug<0>,
                 debug(str<>("MPIX"), "Enable", "Pool", name, "Mode",
                     mpi::experimental::detail::mode_string(mode),

@@ -279,7 +279,7 @@ struct message_receiver
                 // the recursive lambda will handle it
                 auto rx_snd2 = ex::just(buf, message_size, MPI_UNSIGNED_CHAR, prev_rank(rank, size),
                                    tag, MPI_COMM_WORLD) |
-                    mpi::transform_mpi(MPI_Irecv, mpi::stream_type::receive_2) |
+                    mpi::transform_mpi(MPI_Irecv /*, mpi::stream_type::receive_2*/) |
                     ex::then(std::move(reclambda));
                 // launch the receive for the msg on the next round
                 msr_deb<6>.debug(
@@ -293,7 +293,7 @@ struct message_receiver
             msg_info(rank, size, msg_type::send, buf2->header_, "send_R");
             auto tx_snd2 = ex::just(buf2, message_size, MPI_UNSIGNED_CHAR, next_rank(rank, size),
                                tag, MPI_COMM_WORLD) |
-                mpi::transform_mpi(MPI_Isend, mpi::stream_type::send_2) |
+                mpi::transform_mpi(MPI_Isend /*, mpi::stream_type::send_2*/) |
                 ex::then([buf2 = buf2, rank = rank, size = size](/*int result*/) {
                     counter--;
                     msg_info(rank, size, msg_type::send, buf2->header_, "forwarded");
@@ -397,7 +397,7 @@ int pika_main(pika::program_options::variables_map& vm)
                 // create chain of senders to make the mpi recv and handle it
                 auto rx_snd1 = ex::just(rbuf, message_size, MPI_UNSIGNED_CHAR,
                                    prev_rank(rank, size), tag, MPI_COMM_WORLD) |
-                    mpi::transform_mpi(MPI_Irecv, mpi::stream_type::receive_1) |
+                    mpi::transform_mpi(MPI_Irecv /*, mpi::stream_type::receive_1*/) |
                     ex::then(std::move(reclambda));
                 msr_deb<6>.debug(str<>("start_detached"), "rx_snd1", i, orank);
                 ex::start_detached(std::move(rx_snd1));
@@ -409,7 +409,7 @@ int pika_main(pika::program_options::variables_map& vm)
             auto sbuf = get_msg_buffer(header{0, tag, i, 0, 0, std::uint32_t(rank), message_size});
             auto send_snd = ex::just(sbuf, message_size, MPI_UNSIGNED_CHAR, next_rank(rank, size),
                                 tag, MPI_COMM_WORLD) |
-                mpi::transform_mpi(MPI_Isend, mpi::stream_type::send_1) |
+                mpi::transform_mpi(MPI_Isend /*, mpi::stream_type::send_1*/) |
                 ex::then([rank, size, sbuf](/*int res*/) {
                     counter--;
                     msg_info(rank, size, msg_type::send, sbuf->header_, "sent");

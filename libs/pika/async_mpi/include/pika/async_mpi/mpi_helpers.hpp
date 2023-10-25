@@ -173,10 +173,7 @@ namespace pika::mpi::experimental::detail {
         {
             std::lock_guard lk(op_state.mutex);
             op_state.completed = true;
-            //            PIKA_DETAIL_DP(mpi_debug<0>,
-            //                debug(
-            //                    str<>("MPIX"), "mpi start", ptr(detail::mpi_data_.mpi_continuations_request)));
-            MPI_Start(op_state.request);
+            detail::complete_mpix();
         }
         op_state.cond_var.notify_one();
         return MPI_SUCCESS;

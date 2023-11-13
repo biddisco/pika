@@ -104,7 +104,8 @@ namespace pika::mpi::experimental {
             }
             else
             {
-                auto snd0 = PIKA_FORWARD(Sender, sender) | transfer(mpi_pool_scheduler());
+                auto snd0 = PIKA_FORWARD(Sender, sender) |
+                    transfer(mpi_pool_scheduler(thread_priority::boost));
                 return dispatch_mpi_sender<decltype(snd0), F>{
                            PIKA_MOVE(snd0), PIKA_FORWARD(F, f), s} |
                     let_value([=](MPI_Request request) -> unique_any_sender<> {

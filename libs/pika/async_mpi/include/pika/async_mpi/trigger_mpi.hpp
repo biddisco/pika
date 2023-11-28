@@ -86,7 +86,7 @@ namespace pika::mpi::experimental::detail {
             pika::detail::spinlock mutex;
             pika::condition_variable cond_var;
             // MPIX
-            MPI_Request* request;
+            MPI_Request request{0};
 
             // -----------------------------------------------------------------
             // The mpi_receiver receives inputs from the previous sender,
@@ -190,10 +190,15 @@ namespace pika::mpi::experimental::detail {
                             }
                             case handler_mode::mpi_continuation:
                             {
+                                PIKA_DETAIL_DP(mpi_tran<0>,
+                                    debug(str<>("MPIX"), "register_mpix_continuation", ptr(request),
+                                        ptr(r.op_state.request)));
+                                r.op_state.request = request;
+
                                 MPIX_Continue_cb_function* func =
                                     &detail::mpix_callback<operation_state>;
                                 detail::register_mpix_continuation(
-                                    request, func, &r.op_state, &r.op_state.request);
+                                    &r.op_state.request, func, &r.op_state);
                                 {
                                     PIKA_DETAIL_DP(
                                         mpi_tran<0>, debug(str<>("MPIX"), "waiting", ptr(request)));
@@ -237,7 +242,10 @@ namespace pika::mpi::experimental::detail {
               , status{MPI_SUCCESS}
               , op_state(ex::connect(PIKA_FORWARD(Sender_, sender), trigger_mpi_receiver{*this}))
             {
+                PIKA_DETAIL_DP(mpi_tran<0>, debug(str<>("create"), request));
             }
+
+            ~operation_state() { PIKA_DETAIL_DP(mpi_tran<0>, debug(str<>("destroy"), request)); }
 
             friend constexpr auto tag_invoke(ex::start_t, operation_state& os) noexcept
             {

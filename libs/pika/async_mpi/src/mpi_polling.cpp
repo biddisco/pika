@@ -177,6 +177,7 @@ namespace pika::mpi::experimental {
             // MPI continuations support (Experimental mpi extension)
             MPI_Request mpi_continuations_request{MPI_REQUEST_NULL};
             std::atomic<int> mpix_counter{0};
+            std::mutex mpix_lock;
         };
 
         struct initializer
@@ -430,42 +431,35 @@ namespace pika::mpi::experimental {
 
         // -------------------------------------------------------------
         // Background progress function for MPI async operations
-        // Checks for completed MPI_Requests and sets mpi::experimental::future
-        // ready when found
+        // Checks for completed MPI_Requests and readies sender when complete
         pika::threads::detail::polling_status poll()
         {
             using pika::threads::detail::polling_status;
             using namespace pika::mpi::experimental::detail;
 
             // ---------------
-            // if mpi continuations are initialized, use this polling routine
-            // and bypass all the other stuff
+            // if mpi continuations are available, poll here and bypass main routine
 #ifdef PIKA_HAS_MPIX_CONTINUATIONS
             if (detail::mpi_data_.mpi_continuations_request != MPI_REQUEST_NULL)
             {
+                int flag = 0;
+                MPIX_RESULT_CHECK(MPI_Test(
+                    &detail::mpi_data_.mpi_continuations_request, &flag, MPI_STATUS_IGNORE));
+
                 // for debugging, create a timer : debug info every N seconds
                 static auto mpix_deb =
                     mpi_debug<1>.make_timer(2, debug::detail::str<>("MPIX"), "poll");
-                int flag;
-                MPIX_RESULT_CHECK(MPI_Test(
-                    &detail::mpi_data_.mpi_continuations_request, &flag, MPI_STATUS_IGNORE));
                 PIKA_DETAIL_DP(mpi_debug<1>,
                     timed(
                         mpix_deb, ptr(detail::mpi_data_.mpi_continuations_request), "Flag", flag));
 
-                //                if (flag == 0)
-                //                {
-                //                    PIKA_DETAIL_DP(mpi_debug<0>,
-                //                        debug(str<>("MPIX"), "Poll", "mpi start",
-                //                            ptr(detail::mpi_data_.mpi_continuations_request)));
-                //                    MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
-                //                    return pika::threads::detail::polling_status::busy;
-                //                }
-                //                else
-                //                    return pika::threads::detail::polling_status::idle;
-
-                return (flag == 1) ? pika::threads::detail::polling_status::idle :
-                                     pika::threads::detail::polling_status::busy;
+                if (flag != 0)
+                {
+                    restart_mpix();
+                    return pika::threads::detail::polling_status::busy;
+                }
+                else
+                    return pika::threads::detail::polling_status::idle;
             }
 #endif
 
@@ -683,19 +677,18 @@ namespace pika::mpi::experimental {
 
         int comm_world_size() { return detail::mpi_data_.size_; }
 
-        void register_mpix_continuation(MPI_Request request, MPIX_Continue_cb_function* cb_func,
-            void* op_state, MPI_Request** cont_req)
+        void register_mpix_continuation(
+            MPI_Request* request, MPIX_Continue_cb_function* cb_func, void* op_state)
         {
 #ifdef PIKA_HAS_MPIX_CONTINUATIONS
-            *cont_req = &detail::mpi_data_.mpi_continuations_request;
             // @TODO we don't strictly need defer complete flag, but for debugging ...
             PIKA_DETAIL_DP(
                 mpi_debug<0>, debug(str<>("MPIX"), "register continuation", ptr(request)));
-            MPIX_RESULT_CHECK(MPIX_Continue(&request, cb_func, op_state,
-                MPIX_CONT_DEFER_COMPLETE | MPIX_CONT_INVOKE_FAILED, MPI_STATUSES_IGNORE,
+            MPIX_RESULT_CHECK(MPIX_Continue(request, cb_func, op_state,
+                /*MPIX_CONT_DEFER_COMPLETE | */ MPIX_CONT_INVOKE_FAILED, MPI_STATUSES_IGNORE,
                 detail::mpi_data_.mpi_continuations_request));
             //
-            restart_mpix();
+            // restart_mpix();
 
 #endif
         }
@@ -709,18 +702,13 @@ namespace pika::mpi::experimental {
 
         void restart_mpix()
         {
-            static std::mutex mpix_lock;
-            std::lock_guard<std::mutex> l(mpix_lock);
-            if (detail::mpi_data_.mpix_counter < 1)
+            std::lock_guard<std::mutex> l(detail::mpi_data_.mpix_lock);
             {
                 PIKA_DETAIL_DP(mpi_debug<0>,
-                    debug(str<>("MPIX"), "mpi start",
+                    debug(str<>("MPIX"), "MPI_Start",
                         ptr(detail::mpi_data_.mpi_continuations_request)));
                 MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
             }
-            detail::mpi_data_.mpix_counter++;
-            PIKA_DETAIL_DP(
-                mpi_debug<0>, debug(str<>("MPIX"), "counter", detail::mpi_data_.mpix_counter));
         }
     }    // namespace detail
 
@@ -907,7 +895,8 @@ namespace pika::mpi::experimental {
         {
             MPIX_RESULT_CHECK(MPIX_Continue_init(
                 0, MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpi_continuations_request));
-            //MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
+            detail::restart_mpix();
+            //            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
             PIKA_DETAIL_DP(detail::mpi_debug<0>,
                 debug(str<>("MPIX"), "Enable", "Pool", name, "Mode",
                     mpi::experimental::detail::mode_string(mode),

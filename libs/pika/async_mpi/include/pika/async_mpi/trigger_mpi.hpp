@@ -86,7 +86,7 @@ namespace pika::mpi::experimental::detail {
             pika::detail::spinlock mutex;
             pika::condition_variable cond_var;
             // MPIX
-            MPI_Request request{0};
+            MPI_Request request{MPI_REQUEST_NULL};
 
             // -----------------------------------------------------------------
             // The mpi_receiver receives inputs from the previous sender,
@@ -111,14 +111,16 @@ namespace pika::mpi::experimental::detail {
                 // receive the MPI Request and set a callback to be
                 // triggered when the mpi request completes
                 friend constexpr void tag_invoke(
-                    ex::set_value_t, trigger_mpi_receiver r, MPI_Request request) noexcept
+                    ex::set_value_t, trigger_mpi_receiver r, MPI_Request req) noexcept
                 {
                     // early exit check
-                    if (request == MPI_REQUEST_NULL)
+                    if (req == MPI_REQUEST_NULL)
                     {
                         ex::set_value(PIKA_MOVE(r.op_state.receiver));
                         return;
                     }
+
+                    r.op_state.request = req;
 
                     // which polling/testing mode are we using
                     handler_mode mode = get_handler_mode(r.op_state.mode_flags);
@@ -127,8 +129,8 @@ namespace pika::mpi::experimental::detail {
                         execution::thread_priority::normal;
 
                     PIKA_DETAIL_DP(mpi_tran<5>,
-                        debug(str<>("trigger_mpi_recv"), "set_value_t", "req", ptr(request),
-                            "flags", bin<8>(r.op_state.mode_flags),
+                        debug(str<>("trigger_mpi_recv"), "set_value_t", "req",
+                            ptr(r.op_state.request), "flags", bin<8>(r.op_state.mode_flags),
                             mode_string(r.op_state.mode_flags)));
 
                     pika::detail::try_catch_exception_ptr(
@@ -138,7 +140,7 @@ namespace pika::mpi::experimental::detail {
                             case handler_mode::yield_while:
                             {
                                 pika::util::yield_while(
-                                    [request]() { return !detail::poll_request(request); });
+                                    [&r]() { return !detail::poll_request(r.op_state.request); });
 #ifdef PIKA_HAVE_APEX
                                 apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
@@ -151,14 +153,15 @@ namespace pika::mpi::experimental::detail {
                                 // The callback will call set_value/set_error inside a new task
                                 // and execution will continue on that thread
                                 detail::schedule_task_callback(
-                                    request, p, PIKA_MOVE(r.op_state.receiver));
+                                    r.op_state.request, p, PIKA_MOVE(r.op_state.receiver));
                                 break;
                             }
                             case handler_mode::continuation:
                             {
                                 // The callback will call set_value/set_error
                                 // execution will continue on the callback thread
-                                detail::set_value_request_callback_void<>(request, r.op_state);
+                                detail::set_value_request_callback_void<>(
+                                    r.op_state.request, r.op_state);
                                 break;
                             }
                             case handler_mode::suspend_resume:
@@ -167,7 +170,7 @@ namespace pika::mpi::experimental::detail {
                                 PIKA_ASSERT(pika::threads::detail::get_self_id());
                                 // the callback will resume _this_ thread
                                 std::unique_lock l{r.op_state.mutex};
-                                resume_request_callback(request, r.op_state);
+                                resume_request_callback(r.op_state.request, r.op_state);
                                 if (use_priority_boost(r.op_state.mode_flags))
                                 {
                                     threads::detail::thread_data::scoped_thread_priority
@@ -191,24 +194,23 @@ namespace pika::mpi::experimental::detail {
                             case handler_mode::mpi_continuation:
                             {
                                 PIKA_DETAIL_DP(mpi_tran<0>,
-                                    debug(str<>("MPIX"), "register_mpix_continuation", ptr(request),
-                                        ptr(r.op_state.request)));
-                                r.op_state.request = request;
+                                    debug(str<>("MPIX"), "register_mpix_continuation",
+                                        ptr(r.op_state.request), ptr(r.op_state.request)));
 
                                 MPIX_Continue_cb_function* func =
                                     &detail::mpix_callback<operation_state>;
                                 detail::register_mpix_continuation(
                                     &r.op_state.request, func, &r.op_state);
                                 {
-                                    PIKA_DETAIL_DP(
-                                        mpi_tran<0>, debug(str<>("MPIX"), "waiting", ptr(request)));
+                                    PIKA_DETAIL_DP(mpi_tran<0>,
+                                        debug(str<>("MPIX"), "waiting", ptr(r.op_state.request)));
                                     std::unique_lock l{r.op_state.mutex};
                                     r.op_state.cond_var.wait(
                                         l, [&]() { return r.op_state.completed; });
                                 }
 
-                                PIKA_DETAIL_DP(
-                                    mpi_tran<0>, debug(str<>("MPIX"), "woken", ptr(request)));
+                                PIKA_DETAIL_DP(mpi_tran<0>,
+                                    debug(str<>("MPIX"), "woken", ptr(r.op_state.request)));
 
                                 // call set_value/set_error depending on mpi return status
                                 set_value_error_helper(

@@ -36,25 +36,28 @@
 #include <utility>
 #include <vector>
 
-#if /*1 || */ __has_include(<mpi-ext.h>)
+#if __has_include(<mpi-ext.h>)
 # include <mpi-ext.h>
-# define PIKA_HAS_MPIX_CONTINUATIONS
+
+# ifndef OMPI_HAVE_MPI_EXT_CONTINUE
+#  pragma warning "MPIX Continuations not found"
+# endif
+
+# define MPIX_RESULT_CHECK(func)                                                                   \
+  {                                                                                                \
+   int code = func;                                                                                \
+   if (code != MPI_SUCCESS) throw pika::mpi::experimental::mpi_exception(code, "MPIX problem");    \
+  }    //else { std::cout << "MPIX Success" << std::endl; }
+
 #endif
 
-#define MPIX_RESULT_CHECK(func)                                                                    \
- {                                                                                                 \
-  int code = func;                                                                                 \
-  if (code != MPI_SUCCESS) throw pika::mpi::experimental::mpi_exception(code, "MPIX problem");     \
- }    //else { std::cout << "MPIX Success" << std::endl; }
-
 namespace pika::mpi::experimental {
-
     namespace detail {
         // -----------------------------------------------------------------
         // by convention the title is 7 chars (for alignment)
         // a debug level of N shows messages with level 1..N
         template <int Level>
-        static debug::detail::print_threshold<Level, 2> mpi_debug("MPIPOLL");
+        static debug::detail::print_threshold<Level, 0> mpi_debug("MPIPOLL");
 
         constexpr std::uint32_t max_mpi_streams = detail::to_underlying(stream_type::max_stream);
         constexpr std::uint32_t max_poll_requests = 32;
@@ -439,7 +442,7 @@ namespace pika::mpi::experimental {
 
             // ---------------
             // if mpi continuations are available, poll here and bypass main routine
-#ifdef PIKA_HAS_MPIX_CONTINUATIONS
+#ifdef OMPI_HAVE_MPI_EXT_CONTINUE
             if (detail::mpi_data_.mpi_continuations_request != MPI_REQUEST_NULL)
             {
                 int flag = 0;
@@ -459,7 +462,7 @@ namespace pika::mpi::experimental {
                     return pika::threads::detail::polling_status::busy;
                 }
                 else
-                    return pika::threads::detail::polling_status::idle;
+                    return pika::threads::detail::polling_status::busy;
             }
 #endif
 
@@ -680,7 +683,7 @@ namespace pika::mpi::experimental {
         void register_mpix_continuation(
             MPI_Request* request, MPIX_Continue_cb_function* cb_func, void* op_state)
         {
-#ifdef PIKA_HAS_MPIX_CONTINUATIONS
+#ifdef OMPI_HAVE_MPI_EXT_CONTINUE
             // @TODO we don't strictly need defer complete flag, but for debugging ...
             PIKA_DETAIL_DP(
                 mpi_debug<0>, debug(str<>("MPIX"), "register continuation", ptr(request)));
@@ -889,7 +892,7 @@ namespace pika::mpi::experimental {
                     str<>("enabling polling"), name, mpi::experimental::detail::mode_string(mode)));
             detail::register_polling(pika::resource::get_thread_pool(name));
         }
-#ifdef PIKA_HAS_MPIX_CONTINUATIONS
+#ifdef OMPI_HAVE_MPI_EXT_CONTINUE
         if (pika::mpi::experimental::detail::get_handler_mode(mode) ==
             detail::handler_mode::mpi_continuation)
         {

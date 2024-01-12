@@ -445,6 +445,11 @@ namespace pika::mpi::experimental {
 #ifdef OMPI_HAVE_MPI_EXT_CONTINUE
             if (detail::mpi_data_.mpi_continuations_request != MPI_REQUEST_NULL)
             {
+                std::unique_lock lk(detail::mpi_data_.mpix_lock, std::try_to_lock);
+                if (!lk.owns_lock()) {
+                    return polling_status::busy;
+                }
+
                 int flag = 0;
                 MPIX_RESULT_CHECK(MPI_Test(
                     &detail::mpi_data_.mpi_continuations_request, &flag, MPI_STATUS_IGNORE));
@@ -462,7 +467,13 @@ namespace pika::mpi::experimental {
                     return pika::threads::detail::polling_status::busy;
                 }
                 else
-                    return pika::threads::detail::polling_status::busy;
+                    return pika::threads::detail::polling_status::idle;
+            }
+            // don't allow code to escape this block if mpix_continuation mode is 'on'
+            else if (pika::mpi::experimental::detail::get_handler_mode(
+                         mpi::experimental::get_completion_mode())
+                     == detail::handler_mode::mpi_continuation) {
+                return polling_status::idle;
             }
 #endif
 
@@ -705,7 +716,6 @@ namespace pika::mpi::experimental {
 
         void restart_mpix()
         {
-            std::lock_guard<std::mutex> l(detail::mpi_data_.mpix_lock);
             {
                 PIKA_DETAIL_DP(mpi_debug<0>,
                     debug(str<>("MPIX"), "MPI_Start",
@@ -833,6 +843,9 @@ namespace pika::mpi::experimental {
     // but only one thread per rank needs to do so
     void init(bool init_mpi, bool init_errorhandler)
     {
+        // don't allow polling code to run until init has completed
+        std::lock_guard<detail::mutex_type> lk(detail::mpi_data_.polling_vector_mtx_);
+
         if (init_mpi)
         {
             int required = MPI_THREAD_MULTIPLE;
@@ -896,8 +909,11 @@ namespace pika::mpi::experimental {
         if (pika::mpi::experimental::detail::get_handler_mode(mode) ==
             detail::handler_mode::mpi_continuation)
         {
-            MPIX_RESULT_CHECK(MPIX_Continue_init(
-                0, MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpi_continuations_request));
+            std::unique_lock lk(detail::mpi_data_.mpix_lock);
+            MPIX_RESULT_CHECK(MPIX_Continue_init(0,
+                                                 MPI_UNDEFINED,
+                                                 MPI_INFO_NULL,
+                                                 &detail::mpi_data_.mpi_continuations_request));
             detail::restart_mpix();
             //            MPIX_RESULT_CHECK(MPI_Start(&detail::mpi_data_.mpi_continuations_request));
             PIKA_DETAIL_DP(detail::mpi_debug<0>,

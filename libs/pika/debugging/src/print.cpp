@@ -55,6 +55,8 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template PIKA_EXPORT void print_dec(std::ostream&, std::uint32_t const&, int);
     template PIKA_EXPORT void print_dec(std::ostream&, std::int64_t const&, int);
     template PIKA_EXPORT void print_dec(std::ostream&, std::uint64_t const&, int);
+    template PIKA_EXPORT void print_dec(std::ostream&, long long const&, int);
+    template PIKA_EXPORT void print_dec(std::ostream&, double const&, int);
 #if defined(__APPLE__)
     // Explicit instantiation necessary to solve undefined symbol for MacOS
     template PIKA_EXPORT void print_dec(std::ostream&, unsigned long const&, int);
@@ -63,6 +65,18 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<int> const&, int);
     template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<unsigned int> const&, int);
     template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<unsigned long> const&, int);
+
+    // ------------------------------------------------------------------
+    // format as fp
+    // ------------------------------------------------------------------
+    template <typename Float>
+    PIKA_EXPORT void print_fp(std::ostream& os, Float f, int p, int w)
+    {
+        os << std::right << std::setfill(' ') << std::fixed << std::setw(w) << std::setprecision(p)
+           << f;
+    }
+    template PIKA_EXPORT void print_fp(std::ostream&, float, int, int);
+    template PIKA_EXPORT void print_fp(std::ostream&, double, int, int);
 
     // ------------------------------------------------------------------
     // format as pointer

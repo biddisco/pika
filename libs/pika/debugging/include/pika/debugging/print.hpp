@@ -108,6 +108,35 @@ namespace PIKA_DETAIL_NS_DEBUG {
     }
 
     // ------------------------------------------------------------------
+    // format as floating point with precision, width
+    // ------------------------------------------------------------------
+    template <typename Float>
+    PIKA_EXPORT void print_fp(std::ostream& os, Float f, int p, int w);
+
+      template <int P, int W, typename T>
+      struct fp_impl
+      {
+        fp_impl(T const& v)
+          : data_(v)
+        {
+        }
+
+        T const& data_;
+
+        friend std::ostream& operator<<(std::ostream& os, fp_impl<P, W, T> const& d)
+        {
+          print_fp(os, d.data_, W, P);
+          return os;
+        }
+      };
+
+    template <int P = 2, int W = P + 2, typename T>
+    fp_impl<P, W, T> fp(T const& v)
+    {
+      return fp_impl<P, W, T>(v);
+    }
+
+    // ------------------------------------------------------------------
     // format as pointer
     // ------------------------------------------------------------------
     struct ptr

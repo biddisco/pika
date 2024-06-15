@@ -8,6 +8,7 @@
 #include <pika/debugging/environ.hpp>
 #include <pika/debugging/print.hpp>
 
+#include <fmt/format.h>
 #include <boost/crc.hpp>
 
 #include <algorithm>
@@ -38,124 +39,6 @@ PIKA_EXPORT char** freebsd_environ = nullptr;
 // ------------------------------------------------------------
 /// \cond NODETAIL
 namespace PIKA_DETAIL_NS_DEBUG {
-
-    // ------------------------------------------------------------------
-    // format as zero padded int
-    // ------------------------------------------------------------------
-    template <typename Int>
-    PIKA_EXPORT void print_dec(std::ostream& os, Int const& v, int N)
-    {
-        os << std::right << std::setfill('0') << std::setw(N) << std::noshowbase << std::dec << v;
-    }
-
-    template PIKA_EXPORT void print_dec(std::ostream&, bool const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::int16_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::uint16_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::int32_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::uint32_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::int64_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::uint64_t const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, long long const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, double const&, int);
-#if defined(__APPLE__)
-    // Explicit instantiation necessary to solve undefined symbol for MacOS
-    template PIKA_EXPORT void print_dec(std::ostream&, unsigned long const&, int);
-#endif
-
-    template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<int> const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<unsigned int> const&, int);
-    template PIKA_EXPORT void print_dec(std::ostream&, std::atomic<unsigned long> const&, int);
-
-    // ------------------------------------------------------------------
-    // format as fp
-    // ------------------------------------------------------------------
-    template <typename Float>
-    PIKA_EXPORT void print_fp(std::ostream& os, Float f, int p, int w)
-    {
-        os << std::right << std::setfill(' ') << std::fixed << std::setw(w) << std::setprecision(p)
-           << f;
-    }
-    template PIKA_EXPORT void print_fp(std::ostream&, float, int, int);
-    template PIKA_EXPORT void print_fp(std::ostream&, double, int, int);
-
-    // ------------------------------------------------------------------
-    // format as pointer
-    // ------------------------------------------------------------------
-    ptr::ptr(void const* v)
-      : data_(v)
-    {
-    }
-
-    ptr::ptr(std::uintptr_t v)
-      : data_(reinterpret_cast<void const*>(v))
-    {
-    }
-
-    std::ostream& operator<<(std::ostream& os, ptr const& d)
-    {
-        os << std::internal << std::hex << std::setw(14) << std::setfill('0') << d.data_;
-        return os;
-    }
-
-    // ------------------------------------------------------------------
-    // format as zero padded hex
-    // ------------------------------------------------------------------
-    template <typename Int>
-    void print_hex(std::ostream& os, Int v, int N)
-    {
-        os << std::right << "0x" << std::setfill('0') << std::setw(N) << std::noshowbase << std::hex
-           << v;
-    }
-
-    template PIKA_EXPORT void print_hex(std::ostream&, std::thread::id, int);
-    template PIKA_EXPORT void print_hex(std::ostream&, unsigned long, int);
-    template PIKA_EXPORT void print_hex(std::ostream&, long, int);
-    template PIKA_EXPORT void print_hex(std::ostream&, int, int);
-    template PIKA_EXPORT void print_hex(std::ostream&, unsigned int, int);
-    template PIKA_EXPORT void print_hex(std::ostream&, void*, int);
-
-    template <typename Int>
-    void print_ptr(std::ostream& os, Int v, int N)
-    {
-        os << std::right << std::setw(N) << std::noshowbase << std::hex << v;
-    }
-
-    template PIKA_EXPORT void print_ptr(std::ostream&, void*, int);
-    template PIKA_EXPORT void print_ptr(std::ostream&, int, int);
-    template PIKA_EXPORT void print_ptr(std::ostream&, long, int);
-
-    // ------------------------------------------------------------------
-    // format as binary bits
-    // ------------------------------------------------------------------
-    template <typename Int>
-    PIKA_EXPORT void print_bin(std::ostream& os, Int v, int N)
-    {
-        char const* beg = reinterpret_cast<char const*>(&v);
-        char const* end = beg + sizeof(v);
-
-        N = (N + CHAR_BIT - 1) / CHAR_BIT;
-        while (beg != end && N-- > 0) { os << std::bitset<CHAR_BIT>(*beg++); }
-    }
-
-    template PIKA_EXPORT void print_bin(std::ostream&, std::int8_t, int);
-    template PIKA_EXPORT void print_bin(std::ostream&, std::int32_t, int);
-    template PIKA_EXPORT void print_bin(std::ostream&, std::int64_t, int);
-    template PIKA_EXPORT void print_bin(std::ostream&, std::uint8_t, int);
-    template PIKA_EXPORT void print_bin(std::ostream&, std::uint32_t, int);
-    template PIKA_EXPORT void print_bin(std::ostream&, std::uint64_t, int);
-
-#if defined(__APPLE__)
-    // Explicit instantiation necessary to solve undefined symbol for MacOS
-    template PIKA_EXPORT void print_bin(std::ostream&, unsigned long, int);
-#endif
-
-    // ------------------------------------------------------------------
-    // format as padded string
-    // ------------------------------------------------------------------
-    void print_str(std::ostream& os, char const* v, int N)
-    {
-        os << std::left << std::setfill(' ') << std::setw(N) << v;
-    }
 
     // ------------------------------------------------------------------
     // format as ip address
@@ -190,7 +73,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
         auto nowt =
             std::chrono::duration_cast<std::chrono::microseconds>(now - log_t_start).count();
 
-        os << dec<10>(nowt) << " ";
+        os << ffmt<dec10>(nowt) << " ";
         return os;
     }
 
@@ -234,14 +117,14 @@ namespace PIKA_DETAIL_NS_DEBUG {
     {
         std::uint64_t const* uintBuf = static_cast<std::uint64_t const*>(p.addr_);
         os << "Memory:";
-        os << " address " << ptr(p.addr_) << " length " << hex<6>(p.len_)
-           << " CRC32:" << hex<8>(detail::crc32(p.addr_, p.len_)) << "\n";
+        os << " address " << fmt::ptr(p.addr_) << " length " << ffmt<hex6>(p.len_)
+           << " CRC32:" << ffmt<hex8>(detail::crc32(p.addr_, p.len_)) << "\n";
 
         for (std::size_t i = 0;
              i < (std::min)(size_t(std::ceil(static_cast<double>(p.len_) / 8.0)), std::size_t(128));
              i++)
         {
-            os << hex<16>(*uintBuf++) << " ";
+            os << ffmt<hex16>(*uintBuf++) << " ";
         }
         return os;
     }
@@ -315,7 +198,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template <typename T>
     PIKA_EXPORT void print_array(std::string const& name, T const* data, std::size_t size)
     {
-        std::cout << str<20>(name.c_str()) << ": {" << dec<4>(size) << "} : ";
+        std::cout << str<20>(name.c_str()) << ": {" << ffmt<dec4>(size) << "} : ";
         std::copy(data, data + size, std::ostream_iterator<T>(std::cout, ", "));
         std::cout << "\n";
     }

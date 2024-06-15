@@ -29,7 +29,7 @@ namespace tt = pika::this_thread::experimental;
 
 namespace pika {
     // use <true>/<false> to enable/disable debug printing
-    using sbc_print_on = pika::debug::detail::enable_print<false>;
+    using sbc_print_on = enable_print<false>;
     static sbc_print_on deb_schbin("SCHBIND");
 }    // namespace pika
 
@@ -58,10 +58,10 @@ void threadLoop()
         dec_counter dec(count_down);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         std::size_t thread_actual = pika::get_worker_thread_num();
-        pika::deb_schbin.debug(pika::debug::detail::str<10>("Iteration"),
-            pika::debug::detail::dec<4>(iteration),
-            pika::debug::detail::str<20>("Running on thread"), thread_actual,
-            pika::debug::detail::str<10>("Expected"), thread_expected);
+        pika::deb_schbin.debug(str<10>("Iteration"),
+            ffmt<dec4>(iteration),
+            str<20>("Running on thread"), thread_actual,
+            str<10>("Expected"), thread_expected);
         PIKA_TEST_EQ(thread_actual, thread_expected);
     };
 
@@ -79,11 +79,11 @@ void threadLoop()
     do {
         pika::this_thread::yield();
         pika::deb_schbin.debug(
-            pika::debug::detail::str<15>("count_down"), pika::debug::detail::dec<4>(count_down));
+            str<15>("count_down"), ffmt<dec4>(count_down));
     } while (count_down > 0);
 
     pika::deb_schbin.debug(
-        pika::debug::detail::str<15>("complete"), pika::debug::detail::dec<4>(count_down));
+        str<15>("complete"), ffmt<dec4>(count_down));
     PIKA_TEST_EQ(count_down.load(), 0);
 }
 
@@ -99,7 +99,7 @@ int pika_main()
     threadLoop();
 
     pika::finalize();
-    pika::deb_schbin.debug(pika::debug::detail::str<15>("Finalized"));
+    pika::deb_schbin.debug(str<15>("Finalized"));
     return 0;
 }
 

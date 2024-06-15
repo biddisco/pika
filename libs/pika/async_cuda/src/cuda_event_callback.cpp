@@ -94,8 +94,8 @@ namespace pika::cuda::experimental::detail {
                         static auto poll_deb =
                             cud_debug<5>.make_timer(1, str<>("Poll - lock failed"));
                         cud_debug<5>.timed(poll_deb, "enqueued events",
-                            dec<3>(get_number_of_enqueued_events()), "active events",
-                            dec<3>(get_number_of_active_events()));
+                            ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                            ffmt<dec3>(get_number_of_active_events()));
                     }
                     return polling_status::idle;
                 }
@@ -104,8 +104,8 @@ namespace pika::cuda::experimental::detail {
                 {
                     static auto poll_deb = cud_debug<5>.make_timer(1, str<>("Poll - lock success"));
                     cud_debug<5>.timed(poll_deb, "enqueued events",
-                        dec<3>(get_number_of_enqueued_events()), "active events",
-                        dec<3>(get_number_of_active_events()));
+                        ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                        ffmt<dec3>(get_number_of_active_events()));
                 }
 
                 // Grab the handle to the event pool so we can return completed events
@@ -134,9 +134,9 @@ namespace pika::cuda::experimental::detail {
                             // Forward successes and other errors to the callback
                             PIKA_DETAIL_DP(cud_debug<5>,
                                 debug(str<>("set ready vector"), "event",
-                                    hex<8>(continuation.event), "enqueued events",
-                                    dec<3>(get_number_of_enqueued_events()), "active events",
-                                    dec<3>(get_number_of_active_events())));
+                                    ffmt<hex8>(continuation.event), "enqueued events",
+                                    ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                                    ffmt<dec3>(get_number_of_active_events())));
                             // save callback to ready queue
                             ready_events.enqueue({status, std::move(continuation.f)});
                             // release the event handle
@@ -166,10 +166,10 @@ namespace pika::cuda::experimental::detail {
                     }
 
                     PIKA_DETAIL_DP(cud_debug<5>,
-                        debug(debug::detail::str<>("set ready queue"), "event",
-                            debug::detail::hex<8>(continuation.event), "enqueued events",
-                            debug::detail::dec<3>(get_number_of_enqueued_events()), "active events",
-                            debug::detail::dec<3>(get_number_of_active_events())));
+                        debug(str<>("set ready queue"), "event",
+                            ffmt<hex8>(continuation.event), "enqueued events",
+                            ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                            ffmt<dec3>(get_number_of_active_events())));
                     // save callback to ready queue
                     ready_events.enqueue({status, std::move(continuation.f)});
                     // release the event handle
@@ -204,9 +204,9 @@ namespace pika::cuda::experimental::detail {
                 "polling is enabled on at least one thread pool.");
 
             PIKA_DETAIL_DP(cud_debug<5>,
-                debug(str<>("event queued"), "event", hex<8>(event), "enqueued events",
-                    dec<3>(get_number_of_enqueued_events()), "active events",
-                    dec<3>(get_number_of_active_events())));
+                debug(str<>("event queued"), "event", ffmt<hex8>(event), "enqueued events",
+                    ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                    ffmt<dec3>(get_number_of_active_events())));
 
             pika::threads::detail::increment_global_activity_count();
 
@@ -239,9 +239,9 @@ namespace pika::cuda::experimental::detail {
 
             PIKA_DETAIL_DP(cud_debug<5>,
                 debug(str<>("event callback moved from queue to vector"), "event",
-                    hex<8>(continuation.event), "enqueued events",
-                    dec<3>(get_number_of_enqueued_events()), "active events",
-                    dec<3>(get_number_of_active_events())));
+                    ffmt<hex8>(continuation.event), "enqueued events",
+                    ffmt<dec3>(get_number_of_enqueued_events()), "active events",
+                    ffmt<dec3>(get_number_of_active_events())));
         }
 
         event_callback_queue_type event_callback_queue;
@@ -353,7 +353,7 @@ namespace pika::cuda::experimental {
 
     PIKA_EXPORT void set_pool_name(std::string const& name)
     {
-        PIKA_DETAIL_DP(detail::cud_debug<2>, debug(debug::detail::str<>("set pool name"), name));
+        PIKA_DETAIL_DP(detail::cud_debug<2>, debug(str<>("set pool name"), name));
         detail::polling_pool_name = name;
     }
 }    // namespace pika::cuda::experimental

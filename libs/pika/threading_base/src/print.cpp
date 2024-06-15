@@ -24,7 +24,7 @@ namespace pika::debug::detail {
 
     std::ostream& operator<<(std::ostream& os, threadinfo<threads::detail::thread_data*> const& d)
     {
-        os << ptr(d.data) << " \"" << ((d.data != nullptr) ? d.data->get_description() : "nullptr")
+        os << fmt::ptr(d.data) << " \"" << ((d.data != nullptr) ? d.data->get_description() : "nullptr")
            << "\"";
         return os;
     }
@@ -71,7 +71,7 @@ namespace pika::debug::detail {
             {
                 pika::threads::detail::thread_data* dummy =
                     pika::threads::detail::get_self_id_data();
-                os << hex<12, std::uintptr_t>(reinterpret_cast<std::uintptr_t>(dummy)) << " ";
+                os << ffmt<hex12>(reinterpret_cast<std::uintptr_t>(dummy)) << " ";
             }
             char const* pool = "--------";
             auto tid = pika::threads::detail::get_self_id();
@@ -80,11 +80,11 @@ namespace pika::debug::detail {
                 auto* p = get_thread_id_data(tid)->get_scheduler_base()->get_parent_pool();
                 pool = p->get_pool_name().c_str();
             }
-            os << hex<12, std::thread::id>(std::this_thread::get_id()) << " "
+            os << std::this_thread::get_id() << " "
                << debug::detail::str<8>(pool)
 
 #ifdef PIKA_DEBUGGING_PRINT_LINUX
-               << " cpu " << debug::detail::dec<3, int>(sched_getcpu()) << " ";
+               << " cpu " << ffmt<dec3>(sched_getcpu()) << " ";
 #else
                << " cpu " << "--- ";
 #endif

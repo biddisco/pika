@@ -20,9 +20,9 @@
 
 namespace pika {
     // this is an enabled debug object that should output messages
-    static pika::debug::detail::enable_print<true> p_enabled("PRINT  ");
+    static enable_print<true> p_enabled("PRINT  ");
     // this is disabled and we want it to have zero footprint
-    static pika::debug::detail::enable_print<false> p_disabled("PRINT  ");
+    static enable_print<false> p_disabled("PRINT  ");
 }    // namespace pika
 
 int increment(std::atomic<int>& counter) { return ++counter; }
@@ -78,9 +78,9 @@ int main()
     (void) var2;    // silenced unused var when optimized out
 
     p_enabled.debug("var 1",
-        pika::debug::detail::dec<>(PIKA_DETAIL_DP_LAZY(p_enabled, enabled_counter += var1)));
+        dec<>(PIKA_DETAIL_DP_LAZY(p_enabled, enabled_counter += var1)));
     p_disabled.debug("var 2",
-        pika::debug::detail::dec<>(PIKA_DETAIL_DP_LAZY(p_disabled, disabled_counter += var2)));
+        dec<>(PIKA_DETAIL_DP_LAZY(p_disabled, disabled_counter += var2)));
 
     PIKA_TEST_EQ(enabled_counter.load(), 10);
     PIKA_TEST_EQ(disabled_counter.load(), 0);
@@ -89,17 +89,17 @@ int main()
     p_disabled.set(var2, 5);
 
     p_enabled.debug("var 1",
-        pika::debug::detail::dec<>(PIKA_DETAIL_DP_LAZY(p_enabled, enabled_counter += var1)));
+        dec<>(PIKA_DETAIL_DP_LAZY(p_enabled, enabled_counter += var1)));
     p_disabled.debug("var 2",
-        pika::debug::detail::dec<>(PIKA_DETAIL_DP_LAZY(p_disabled, disabled_counter += var2)));
+        dec<>(PIKA_DETAIL_DP_LAZY(p_disabled, disabled_counter += var2)));
 
     PIKA_TEST_EQ(enabled_counter.load(), 15);
     PIKA_TEST_EQ(disabled_counter.load(), 0);
 
     // ---------------------------------------------------------
     // Test that timed log messages behave as expected
-    static auto t_enabled = p_enabled.make_timer(1, debug::detail::str<>("Timed (enabled)"));
-    static auto t_disabled = p_disabled.make_timer(1, debug::detail::str<>("Timed (disabled)"));
+    static auto t_enabled = p_enabled.make_timer(1, str<>("Timed (enabled)"));
+    static auto t_disabled = p_disabled.make_timer(1, str<>("Timed (disabled)"));
 
     // run a loop for 2 seconds with a timed print every 1 sec
     auto start = std::chrono::system_clock::now();
@@ -107,10 +107,10 @@ int main()
     while (std::chrono::duration_cast<std::chrono::seconds>(end - start).count() < 2)
     {
         p_enabled.timed(t_enabled, "enabled",
-            debug::detail::dec<3>(PIKA_DETAIL_DP_LAZY(p_enabled, ++enabled_counter)));
+            ffmt<dec3>(PIKA_DETAIL_DP_LAZY(p_enabled, ++enabled_counter)));
 
         p_disabled.timed(t_disabled, "disabled",
-            debug::detail::dec<3>(PIKA_DETAIL_DP_LAZY(p_disabled, ++disabled_counter)));
+            ffmt<dec3>(PIKA_DETAIL_DP_LAZY(p_disabled, ++disabled_counter)));
         end = std::chrono::system_clock::now();
     }
     PIKA_TEST_EQ(enabled_counter.load() > 10, true);

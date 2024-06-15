@@ -7,8 +7,10 @@
 #pragma once
 
 #include <pika/config.hpp>
+#include <fmt/format.h>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -37,8 +39,8 @@
 //
 //             spq_deb.debug(str<16>("cleanup_terminated"), "v1"
 //                  , "D" , dec<2>(domain_num)
-//                  , "Q" , dec<3>(q_index)
-//                  , "thread_num", dec<3>(local_num));
+//                  , "Q" , ffmt<dec3>(q_index)
+//                  , "thread_num", ffmt<dec3>(local_num));
 //
 // various print formatters (dec/hex/str) are supplied to make
 // the output regular and aligned for easy parsing/scanning.
@@ -57,11 +59,7 @@
 // when debugging is disabled
 #define PIKA_DETAIL_DP_LAZY(printer, Expr) printer.eval([&] { return Expr; })
 #define PIKA_DETAIL_DP(printer, Expr)                                                              \
-    if constexpr (printer.is_enabled())                                                            \
-    {                                                                                              \
-        using namespace pika::debug::detail;                                                       \
-        printer.Expr;                                                                              \
-    };
+ /*if constexpr (printer.is_enabled())*/ { using namespace pika::debug::detail; printer.Expr; };
 
 #define PIKA_DETAIL_NS_DEBUG pika::debug::detail
 
@@ -69,6 +67,25 @@
 /// \cond NODETAIL
 // NOLINTNEXTLINE(modernize-concat-nested-namespaces)
 namespace PIKA_DETAIL_NS_DEBUG {
+
+    // common formats that are used with acceptable alignment
+    constexpr char bin8[] = "{:08b}";
+    constexpr char bin16[] = "{:016b}";
+    constexpr char dec3[] = "{:03d}";
+    constexpr char dec4[] = "{:04d}";
+    constexpr char dec6[] = "{:06d}";
+    constexpr char dec8[] = "{:08d}";
+    constexpr char dec9[] = "{:09d}";
+    constexpr char dec10[] = "{:010d}";
+    constexpr char dec12[] = "{:012d}";
+    constexpr char dec18[] = "{:018d}";
+    constexpr char hex6[] = "{:#08x}"; // add 2 for 0x prefix
+    constexpr char hex8[] = "{:#010x}"; // ...
+    constexpr char hex12[] = "{:#014x}"; // ...
+    constexpr char hex16[] = "{:#018x}"; // ...
+    constexpr char fp12_8[] = "{:12.8f}"; // a commmon layout
+    constexpr char strl[] = "{:<{}}";
+    constexpr char strr[] = "{:>{}}";
 
     // ------------------------------------------------------------------
     // helper for N>M true/false
@@ -79,176 +96,47 @@ namespace PIKA_DETAIL_NS_DEBUG {
     };
 
     // ------------------------------------------------------------------
-    // format as zero padded int
+    // format using fmt::format
     // ------------------------------------------------------------------
-    template <typename Int>
-    PIKA_EXPORT void print_dec(std::ostream& os, Int const& v, int n);
-
-    template <int N, typename T>
-    struct dec_impl
+    template <const char * fmt_str>
+    struct ffmt
     {
-        constexpr explicit dec_impl(T const& v)
-          : data_(v)
+        template <typename T>
+        ffmt(T const& val)
+          : fmt_(fmt::format(fmt_str, val))
         {
         }
 
-        T const& data_;
-
-        friend std::ostream& operator<<(std::ostream& os, dec_impl<N, T> const& d)
+        template <typename T>
+        ffmt(std::atomic<T> const& val)
+          : fmt_(fmt::format(fmt_str, val.load()))
         {
-            print_dec(os, d.data_, N);
-            return os;
+        }
+
+        const std::string fmt_;
+
+        constexpr friend std::ostream& operator<<(std::ostream& os,  ffmt const& d)
+        {
+            return os << d.fmt_;
         }
     };
-
-    template <int N = 2, typename T>
-    dec_impl<N, T> dec(T const& v)
-    {
-        return dec_impl<N, T>(v);
-    }
-
-    // ------------------------------------------------------------------
-    // format as floating point with precision, width
-    // ------------------------------------------------------------------
-    template <typename Float>
-    PIKA_EXPORT void print_fp(std::ostream& os, Float f, int p, int w);
-
-      template <int P, int W, typename T>
-      struct fp_impl
-      {
-        fp_impl(T const& v)
-          : data_(v)
-        {
-        }
-
-        T const& data_;
-
-        friend std::ostream& operator<<(std::ostream& os, fp_impl<P, W, T> const& d)
-        {
-          print_fp(os, d.data_, W, P);
-          return os;
-        }
-      };
-
-    template <int P = 2, int W = P + 2, typename T>
-    fp_impl<P, W, T> fp(T const& v)
-    {
-      return fp_impl<P, W, T>(v);
-    }
-
-    // ------------------------------------------------------------------
-    // format as pointer
-    // ------------------------------------------------------------------
-    struct ptr
-    {
-        PIKA_EXPORT ptr(void const* v);
-        PIKA_EXPORT ptr(std::uintptr_t v);
-
-        void const* data_;
-
-        PIKA_EXPORT friend std::ostream& operator<<(std::ostream& os, ptr const& d);
-    };
-
-    // ------------------------------------------------------------------
-    // format as zero padded hex
-    // ------------------------------------------------------------------
-    template <typename Int>
-    PIKA_EXPORT void print_hex(std::ostream& os, Int v, int n);
-
-    template <int N = 4, typename T = int, typename Enable = void>
-    struct hex_impl;
-
-    template <int N, typename T>
-    struct hex_impl<N, T, std::enable_if_t<!std::is_pointer<T>::value>>
-    {
-        constexpr explicit hex_impl(T const& v)
-          : data_(v)
-        {
-        }
-
-        T const& data_;
-
-        friend std::ostream& operator<<(std::ostream& os, hex_impl<N, T> const& d)
-        {
-            print_hex(os, d.data_, N);
-            return os;
-        }
-    };
-
-    template <typename Int>
-    PIKA_EXPORT void print_ptr(std::ostream& os, Int v, int n);
-
-    template <int N, typename T>
-    struct hex_impl<N, T, std::enable_if_t<std::is_pointer<T>::value>>
-    {
-        constexpr explicit hex_impl(T const& v)
-          : data_(v)
-        {
-        }
-
-        T const& data_;
-
-        friend std::ostream& operator<<(std::ostream& os, hex_impl<N, T> const& d)
-        {
-            print_ptr(os, static_cast<void*>(d.data_), N);
-            return os;
-        }
-    };
-
-    template <int N = 4, typename T>
-    constexpr hex_impl<N, T> hex(T const& v)
-    {
-        return hex_impl<N, T>(v);
-    }
-
-    // ------------------------------------------------------------------
-    // format as binary bits
-    // ------------------------------------------------------------------
-    template <typename Int>
-    PIKA_EXPORT void print_bin(std::ostream& os, Int v, int n);
-
-    template <int N = 8, typename T = int>
-    struct bin_impl
-    {
-        constexpr explicit bin_impl(T const& v)
-          : data_(v)
-        {
-        }
-
-        T const& data_;
-
-        friend std::ostream& operator<<(std::ostream& os, bin_impl<N, T> const& d)
-        {
-            print_bin(os, d.data_, N);
-            return os;
-        }
-    };
-
-    template <int N = 8, typename T>
-    constexpr bin_impl<N, T> bin(T const& v)
-    {
-        return bin_impl<N, T>(v);
-    }
 
     // ------------------------------------------------------------------
     // format as padded string
     // ------------------------------------------------------------------
-    PIKA_EXPORT void print_str(std::ostream& os, char const* v, int n);
-
     template <int N = 20>
     struct str
     {
-        constexpr str(char const* v)
-          : data_(v)
+        str(const char *val)
+          : fmt_(fmt::format(strl, val, N))
         {
         }
 
-        char const* data_;
+        const std::string fmt_;
 
         friend std::ostream& operator<<(std::ostream& os, str<N> const& d)
         {
-            print_str(os, d.data_, N);
-            return os;
+            return os << d.fmt_;
         }
     };
 

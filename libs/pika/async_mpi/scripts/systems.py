@@ -1,0 +1,458 @@
+# Modified from : Distributed Linear Algebra with Future (DLAF)
+#
+# Copyright (c) 2018-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+# a system is a dict containing the following data:
+# "Cores" (int > 0),
+# "Threads per core" (int > 0),
+# "Allowed rpns" (list of int > 0),
+# "Multiple rpn in same job" (bool),
+# "GPU" (bool),
+# [optional] "sleep" (int representing the sleep time between runs)
+# "Run command" (string:
+#                        {nodes}, {rpn}, {total_ranks}, {cores_per_rank}, {threads_per_rank}
+#                        will be replaced with the correct value (*).
+#                        Extra keywords can be used when providing "Extra subs".)
+# "Batch preamble" (multiline string:
+#                                     {run_name}, {time_min}, {bs_name}, {nodes}
+#                                     will be replaced with the correct value (*),
+#                                     if "Multiple rpn in same job" is false
+#                                     {rpn}, {total_ranks}, {cores_per_rank}, {threads_per_rank} are also replaced.
+#                                     extra keywords can be used when providing "Extra subs".)
+# [optional] "Extra subs" (function(dictionary params) which returns a dictionary containing at least the entries of params.
+#                          Note: this function is invoked for both "Run command" and "Batch preamble", therefore some items are not always present.)
+# (*) Note: replace are done with the format command (extra care needed when using { or }).
+
+cscs = {}
+
+# ------------------------------------------------------------------------------
+cscs["daint-mc"] = {
+    "Cores": 36,
+    "Threads per core": 1,
+    "Allowed rpns": [1, 2, 4],
+    "Multiple rpn in same job": True,
+    "GPU": False,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank}",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --partition=normal
+#SBATCH --account=csstaff
+#SBATCH --constraint=mc
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+cscs["daint-gpu"] = {
+    "Cores": 12,
+    "Threads per core": 1,
+    "Allowed rpns": [1],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank}",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --partition=normal
+#SBATCH --account=csstaff
+#SBATCH --constraint=gpu
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+cscs["eiger"] = {
+    "Cores": 128,
+    "Threads per core": 1,
+    "Allowed rpns": [1, 2, 4, 8],
+    "Multiple rpn in same job": True,
+    "GPU": False,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank}",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Requires uenv": True,
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --account=csstaff
+#SBATCH --constraint=mc
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+cscs["eiger-openmpi"]                       = cscs["eiger"].copy()
+cscs["eiger-openmpi"]["Cores"]              = 128
+cscs["eiger-openmpi"]["Max cores per rank"] = 64
+cscs["eiger-openmpi"]["Run command"]        = "${spack location -i mpi}/bin/mpirun -n {total_ranks} --mca pml ob1 --map-by ppr:{rpn}:node:PE={threads_per_rank} -- "
+
+# ------------------------------------------------------------------------------
+# NOTE: Here is assumed that `gpu2ranks_slurm_cuda` is in PATH!
+#       modify "Run command" if it is not the case.
+cscs["clariden-nvgpu"] = {
+    "Cores": 64,
+    "Threads per core": 2,
+    "Allowed rpns": [4],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    # Based on nvidia-smi topo --matrix
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=mask_cpu:ffff000000000000ffff000000000000,ffff000000000000ffff00000000,ffff000000000000ffff0000,ffff000000000000ffff gpu2ranks_slurm_cuda",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Requires uenv": True,
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --partition=nvgpu
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+# NOTE: Here is assumed that `gpu2ranks_slurm_hip` is in PATH!
+#       modify "Run command" if it is not the case.
+cscs["clariden-amdgpu"] = {
+    "Cores": 64,
+    "Threads per core": 2,
+    "Allowed rpns": [8],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=mask_cpu:ff00000000000000ff000000000000,ff00000000000000ff00000000000000,ff00000000000000ff0000,ff00000000000000ff000000,ff00000000000000ff,ff00000000000000ff00,ff00000000000000ff00000000,ff00000000000000ff0000000000 gpu2ranks_slurm_hip",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Requires uenv": True,
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --partition=amdgpu
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+# NOTE: Here is assumed that `gpu2ranks_slurm_cuda` is in PATH!
+#       modify "Run command" if it is not the case.
+cscs["santis"] = {
+    "Cores": 288,
+    "Threads per core": 1,
+    "Allowed rpns": [4],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank} {wrapper}/gh200-gpu-wrapper.sh",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Requires uenv": True,
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# ====================
+# Env vars
+# ====================
+
+# Required to work around MPICH bug
+export MPICH_OPT_THREAD_SYNC=0
+
+# libfabric settings to try to work around hangs
+export FI_CXI_RDZV_THRESHOLD=8192
+export FI_CXI_RDZV_GET_MIN=4096
+export FI_CXI_RX_MATCH_MODE=software
+export FI_CXI_REQ_BUF_MIN_POSTED=64
+export FI_CXI_DEFAULT_CQ_SIZE=8192
+export FI_CXI_DEFAULT_TX_SIZE=8192
+
+# These are set as always
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Stack overflows
+export PIKA_SMALL_STACK_SIZE=0x40000
+
+# better performance on gpus (also used for other systems, and can be set in the benchmarking script as a command line option as well
+export DLAF_BT_BAND_TO_TRIDIAG_HH_APPLY_GROUP_SIZE=128
+
+# temporary workaround for gpudirect slowdowns (see thread above)
+export DLAF_UMPIRE_DEVICE_MEMORY_POOL_INITIAL_BYTES=$((40 * (1 << 30)))
+
+# if DLAF_WITH_MPI_GPU_AWARE is set, the following env vars are used to set the gpu aware options
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+
+# ====================
+# Debug
+# ====================
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+# NOTE: Here is assumed that `gpu2ranks_slurm_cuda` is in PATH!
+#       modify "Run command" if it is not the case.
+cscs["todi"] = {
+    "Cores": 288,
+    "Threads per core": 1,
+    "Max cores per rank": 64,
+    "Allowed rpns": [4],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank} -- {wrapper}/gh200-gpu-wrapper.sh",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Requires uenv": True,
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+#SBATCH --uenv={uenv}
+
+# ====================
+# Env vars
+# ====================
+spack load cray-mpich
+
+# Required to work around MPICH bug - not needed with mpich@1.30+
+# export MPICH_OPT_THREAD_SYNC=0
+
+# libfabric settings to try to work around hangs
+export FI_CXI_RDZV_THRESHOLD=8192
+export FI_CXI_RDZV_GET_MIN=4096
+export FI_CXI_RX_MATCH_MODE=software
+export FI_CXI_REQ_BUF_MIN_POSTED=64
+export FI_CXI_DEFAULT_CQ_SIZE=8192
+export FI_CXI_DEFAULT_TX_SIZE=8192
+
+# These are set as always
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Stack overflows
+export PIKA_SMALL_STACK_SIZE=0x40000
+
+# better performance on gpus (also used for other systems, and can be set in the benchmarking script as a command line option as well
+export DLAF_BT_BAND_TO_TRIDIAG_HH_APPLY_GROUP_SIZE=128
+
+# temporary workaround for gpudirect slowdowns (see thread above)
+export DLAF_UMPIRE_DEVICE_MEMORY_POOL_INITIAL_BYTES=$((40 * (1 << 30)))
+
+# if DLAF_WITH_MPI_GPU_AWARE is set, the following env vars are used to set the gpu aware options
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+# ====================
+# Debug
+# ====================
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+# modify "Run command" to fix location of {wrapper} script for openmpi launches
+cscs["todi-openmpi"] = cscs["todi"].copy()
+cscs["todi-openmpi"]["Run command"] = "mpirun -n {total_ranks} --map-by ppr:4:node:PE={threads_per_rank} -- {wrapper}/gh200-gpu-wrapper.sh"
+cscs["todi-openmpi"]["Batch preamble"] = """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+#SBATCH --uenv={uenv}
+
+# ====================
+# Env vars
+# ====================
+spack load openmpi
+
+# libfabric settings to try to work around hangs
+export FI_CXI_RDZV_THRESHOLD=8192
+export FI_CXI_RDZV_GET_MIN=4096
+export FI_CXI_RX_MATCH_MODE=software
+export FI_CXI_REQ_BUF_MIN_POSTED=64
+export FI_CXI_DEFAULT_CQ_SIZE=8192
+export FI_CXI_DEFAULT_TX_SIZE=8192
+
+# These are set as always
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Stack overflows
+export PIKA_SMALL_STACK_SIZE=0x40000
+
+# better performance on gpus (also used for other systems, and can be set in the benchmarking script as a command line option as well
+export DLAF_BT_BAND_TO_TRIDIAG_HH_APPLY_GROUP_SIZE=128
+
+# temporary workaround for gpudirect slowdowns (see thread above)
+export DLAF_UMPIRE_DEVICE_MEMORY_POOL_INITIAL_BYTES=$((40 * (1 << 30)))
+
+# ====================
+# Debug
+# ====================
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+"""
+
+# ------------------------------------------------------------------------------
+csc = {}
+
+csc["lumi-cpu"] = {
+    "Cores": 128,
+    "Threads per core": 2,
+    "Allowed rpns": [1, 2, 4, 8],
+    "Multiple rpn in same job": True,
+    "GPU": False,
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=core -c {threads_per_rank}",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --account=project_465000105
+#SBATCH --partition=standard
+#SBATCH --hint=multithread
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}
+
+# ------------------------------------------------------------------------------
+# NOTE: Here is assumed that `gpu2ranks_slurm_hip` is in PATH!
+#       modify "Run command" if it is not the case.
+csc["lumi-gpu"] = {
+    "Cores": 64,
+    "Threads per core": 2,
+    "Allowed rpns": [8],
+    "Multiple rpn in same job": True,
+    "GPU": True,
+    # Based on
+    # https://docs.lumi-supercomputer.eu/runjobs/scheduled-jobs/distribution-binding/#gpu-binding
+    # and rocm-smi --show-topo
+    "Run command": "srun -u {srun_args} -n {total_ranks} --cpu-bind=mask_cpu:fe00000000000000fe000000000000,fe00000000000000fe00000000000000,fe00000000000000fe0000,fe00000000000000fe000000,fe00000000000000fe,fe00000000000000fe00,fe00000000000000fe00000000,fe00000000000000fe0000000000 gpu2ranks_slurm_hip",
+    "Launch command": "sbatch --chdir={job_path} {job_file}",
+    "Batch preamble": """
+#!/bin/bash -l
+#SBATCH --job-name={run_name}_{nodes}
+#SBATCH --time={time_min}
+#SBATCH --nodes={nodes}
+#SBATCH --account=project_465000105
+#SBATCH --partition=standard-g
+#SBATCH --hint=multithread
+#SBATCH --gpus-per-node=8
+#SBATCH --output=output.txt
+#SBATCH --error=error.txt
+
+# Env
+export MPICH_MAX_THREAD_SAFETY=multiple
+export MIMALLOC_EAGER_COMMIT_DELAY=0
+export MIMALLOC_LARGE_OS_PAGES=1
+
+# Debug
+module list &> modules_{bs_name}.txt
+printenv > env_{bs_name}.txt
+
+# Commands
+""",
+}

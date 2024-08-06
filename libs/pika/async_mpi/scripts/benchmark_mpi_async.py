@@ -43,7 +43,7 @@ systems.cscs["oryx2-mpich"] = {
     "GPU": True,
     # cd {job_path} ;
     "Launch command": "cd {job_path} ; source {job_file}",
-    "Run command": "mpiexec -n {total_ranks} -bind-to hwthread:PE={threads_per_rank*total_ranks} ",
+    "Run command": "mpiexec -n {total_ranks} -bind-to hwthread:PE={threads_per_rank} ",
     "Batch preamble": """
 #!/bin/bash -l
 spack load mpich
@@ -248,8 +248,11 @@ print("threads              :", threads_arr)
 print("test_apps            :", miniapps)
 
 # ------------------------------------------------------------------
-def extra_csv_named(poll, sched, machine, branch, name):
-    return f'--csv --pp-info "mpi_poll, {poll}, scheduler, {sched}, machine, {machine}, branch, {branch}, benchmark, {name}"'
+def extra_csv_named(poll, sched, machine, branch, name, mpimode=None):
+    if mpimode is None:
+        return f'--csv --pp-info "mpi_poll, {poll}, scheduler, {sched}, machine, {machine}, branch, {branch}, benchmark, {name}"'
+    else:
+        return f'--csv --pp-info "mpi_completion, {mpimode}, mpi_poll, {poll}, scheduler, {sched}, machine, {machine}, branch, {branch}, benchmark, {name}"'
 
 # ------------------------------------------------------------------
 # if an executable wrapper script is needed, we must set the path here
@@ -378,6 +381,7 @@ else:
                                 args.machine,
                                 branch,
                                 "cholesky",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -395,6 +399,7 @@ else:
                                 args.machine,
                                 branch,
                                 "gen2std",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -417,6 +422,7 @@ else:
                                 args.machine,
                                 branch,
                                 "red2band",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -439,6 +445,7 @@ else:
                                 args.machine,
                                 branch,
                                 "band2trid",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -456,6 +463,7 @@ else:
                                 args.machine,
                                 branch,
                                 "trid_evp",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -479,6 +487,7 @@ else:
                                 args.machine,
                                 branch,
                                 "bt_band2trid",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -502,6 +511,7 @@ else:
                                 args.machine,
                                 branch,
                                 "bt_red2band",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -524,6 +534,7 @@ else:
                                 args.machine,
                                 branch,
                                 "trsm",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -546,6 +557,7 @@ else:
                                 args.machine,
                                 branch,
                                 "evp",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,
@@ -568,6 +580,7 @@ else:
                                 args.machine,
                                 branch,
                                 "gevp",
+                                mpimode=mode,
                             ),
                             env=evar,
                             srun_args=srun_args,

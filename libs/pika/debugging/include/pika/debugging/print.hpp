@@ -59,7 +59,10 @@
 // when debugging is disabled
 #define PIKA_DETAIL_DP_LAZY(printer, Expr) printer.eval([&] { return Expr; })
 #define PIKA_DETAIL_DP(printer, Expr)                                                              \
- /*if constexpr (printer.is_enabled())*/ { using namespace pika::debug::detail; printer.Expr; };
+    /*if constexpr (printer.is_enabled())*/ {                                                      \
+        using namespace pika::debug::detail;                                                       \
+        printer.Expr;                                                                              \
+    };
 
 #define PIKA_DETAIL_NS_DEBUG pika::debug::detail
 
@@ -79,11 +82,11 @@ namespace PIKA_DETAIL_NS_DEBUG {
     constexpr char dec10[] = "{:010d}";
     constexpr char dec12[] = "{:012d}";
     constexpr char dec18[] = "{:018d}";
-    constexpr char hex6[] = "{:#08x}"; // add 2 for 0x prefix
-    constexpr char hex8[] = "{:#010x}"; // ...
-    constexpr char hex12[] = "{:#014x}"; // ...
-    constexpr char hex16[] = "{:#018x}"; // ...
-    constexpr char fp12_8[] = "{:12.8f}"; // a commmon layout
+    constexpr char hex6[] = "{:#08x}";       // add 2 for 0x prefix
+    constexpr char hex8[] = "{:#010x}";      // ...
+    constexpr char hex12[] = "{:#014x}";     // ...
+    constexpr char hex16[] = "{:#018x}";     // ...
+    constexpr char fp12_8[] = "{:12.8f}";    // a commmon layout
     constexpr char strl[] = "{:<{}}";
     constexpr char strr[] = "{:>{}}";
 
@@ -98,7 +101,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
     // ------------------------------------------------------------------
     // format using fmt::format
     // ------------------------------------------------------------------
-    template <const char * fmt_str>
+    template <const char* fmt_str>
     struct ffmt
     {
         template <typename T>
@@ -115,7 +118,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
 
         const std::string fmt_;
 
-        constexpr friend std::ostream& operator<<(std::ostream& os,  ffmt const& d)
+        constexpr friend std::ostream& operator<<(std::ostream& os, ffmt const& d)
         {
             return os << d.fmt_;
         }
@@ -127,17 +130,14 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template <int N = 20>
     struct str
     {
-        str(const char *val)
+        str(const char* val)
           : fmt_(fmt::format(strl, val, N))
         {
         }
 
         const std::string fmt_;
 
-        friend std::ostream& operator<<(std::ostream& os, str<N> const& d)
-        {
-            return os << d.fmt_;
-        }
+        friend std::ostream& operator<<(std::ostream& os, str<N> const& d) { return os << d.fmt_; }
     };
 
     // ------------------------------------------------------------------

@@ -40,8 +40,8 @@
 # endif
 #endif
 
-namespace pika::detail {
-    static pika::debug::detail::enable_print<QUEUE_HOLDER_NUMA_DEBUG> nq_deb("QH_NUMA");
+namespace pika::debug::detail {
+    static enable_print<QUEUE_HOLDER_NUMA_DEBUG> nq_deb("QH_NUMA");
 }
 
 // ------------------------------------------------------------////////
@@ -89,6 +89,7 @@ namespace pika::threads::detail {
         inline bool get_next_thread_HP(std::size_t qidx, threads::detail::thread_id_ref_type& thrd,
             bool stealing, bool core_stealing)
         {
+            using namespace pika::debug::detail;
             // loop over queues and take one task,
             std::size_t q = qidx;
             for (std::size_t i = 0; i < num_queues_; ++i, q = fast_mod((qidx + i), num_queues_))
@@ -96,13 +97,13 @@ namespace pika::threads::detail {
                 if (queues_[q]->get_next_thread_HP(thrd, (stealing || (i > 0)), i == 0))
                 {
                     // clang-format off
-                    pika::detail::nq_deb.debug(debug::detail::str<>("HP/BP get_next")
-                         , "D", debug::detail::dec<2>(domain_)
-                         , "Q",  debug::detail::dec<3>(q)
-                         , "Qidx",  debug::detail::dec<3>(qidx)
+                    nq_deb.debug(str<>("HP/BP get_next")
+                         , "D", ffmt<dec3>(domain_)
+                         , "Q",  ffmt<dec3>(q)
+                         , "Qidx",  ffmt<dec3>(qidx)
                          , ((i==0 && !stealing) ? "taken" : "stolen from")
                          , typename ThreadQueue::queue_data_print(queues_[q])
-                         , debug::detail::threadinfo<
+                         , threadinfo<
                                  threads::detail::thread_id_ref_type*>(&thrd));
                     // clang-format on
                     return true;
@@ -117,6 +118,7 @@ namespace pika::threads::detail {
         inline bool get_next_thread(std::size_t qidx, threads::detail::thread_id_ref_type& thrd,
             bool stealing, bool core_stealing)
         {
+            using namespace pika::debug::detail;
             // loop over queues and take one task,
             // starting with the requested queue
             std::size_t q = qidx;
@@ -125,12 +127,12 @@ namespace pika::threads::detail {
                 // if we got a thread, return it, only allow stealing if i>0
                 if (queues_[q]->get_next_thread(thrd, (stealing || (i > 0))))
                 {
-                    pika::detail::nq_deb.debug(debug::detail::str<>("get_next"), "D",
-                        debug::detail::dec<2>(domain_), "Q", debug::detail::dec<3>(q), "Qidx",
-                        debug::detail::dec<3>(qidx),
+                    nq_deb.debug(str<>("get_next"), "D",
+                        ffmt<dec3>(domain_), "Q", ffmt<dec3>(q), "Qidx",
+                        ffmt<dec3>(qidx),
                         ((i == 0 && !stealing) ? "taken" : "stolen from"),
                         typename ThreadQueue::queue_data_print(queues_[q]),
-                        debug::detail::threadinfo<threads::detail::thread_id_ref_type*>(&thrd));
+                        threadinfo<threads::detail::thread_id_ref_type*>(&thrd));
                     return true;
                 }
                 // if stealing disabled, do not check other queues
@@ -143,6 +145,7 @@ namespace pika::threads::detail {
         bool add_new_HP(ThreadQueue* receiver, std::size_t qidx, std::size_t& added, bool stealing,
             bool allow_stealing)
         {
+            using namespace pika::debug::detail;
             // loop over queues and take one task,
             std::size_t q = qidx;
             for (std::size_t i = 0; i < num_queues_; ++i, q = fast_mod((qidx + i), num_queues_))
@@ -151,11 +154,11 @@ namespace pika::threads::detail {
                 if (added > 0)
                 {
                     // clang-format off
-                    pika::detail::nq_deb.debug(debug::detail::str<>("HP/BP add_new")
-                        , "added", debug::detail::dec<>(added)
-                        , "D", debug::detail::dec<2>(domain_)
-                        , "Q",  debug::detail::dec<3>(q)
-                        , "Qidx",  debug::detail::dec<3>(qidx)
+                    nq_deb.debug(str<>("HP/BP add_new")
+                        , "added", ffmt<dec3>(added)
+                        , "D", ffmt<dec3>(domain_)
+                        , "Q",  ffmt<dec3>(q)
+                        , "Qidx",  ffmt<dec3>(qidx)
                         , ((i==0 && !stealing) ? "taken" : "stolen from")
                         , typename ThreadQueue::queue_data_print(queues_[q]));
                     // clang-format on
@@ -171,6 +174,7 @@ namespace pika::threads::detail {
         bool add_new(ThreadQueue* receiver, std::size_t qidx, std::size_t& added, bool stealing,
             bool allow_stealing)
         {
+            using namespace pika::debug::detail;
             // loop over queues and take one task,
             std::size_t q = qidx;
             for (std::size_t i = 0; i < num_queues_; ++i, q = fast_mod((qidx + i), num_queues_))
@@ -179,11 +183,11 @@ namespace pika::threads::detail {
                 if (added > 0)
                 {
                     // clang-format off
-                    pika::detail::nq_deb.debug(debug::detail::str<>("add_new")
-                         , "added", debug::detail::dec<>(added)
-                         , "D", debug::detail::dec<2>(domain_)
-                         , "Q",  debug::detail::dec<3>(q)
-                         , "Qidx",  debug::detail::dec<3>(qidx)
+                    nq_deb.debug(str<>("add_new")
+                         , "added", ffmt<dec3>(added)
+                         , "D", ffmt<dec3>(domain_)
+                         , "Q",  ffmt<dec3>(q)
+                         , "Qidx",  ffmt<dec3>(qidx)
                          , ((i==0 && !stealing) ? "taken" : "stolen from")
                          , typename ThreadQueue::queue_data_print(queues_[q]));
                     // clang-format on

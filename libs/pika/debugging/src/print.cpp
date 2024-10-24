@@ -8,8 +8,8 @@
 #include <pika/debugging/environ.hpp>
 #include <pika/debugging/print.hpp>
 
-#include <fmt/format.h>
 #include <boost/crc.hpp>
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
@@ -125,6 +125,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
              i++)
         {
             os << ffmt<hex16>(*uintBuf++) << " ";
+            if (i % 4 == 3) os << "\n";
         }
         return os;
     }

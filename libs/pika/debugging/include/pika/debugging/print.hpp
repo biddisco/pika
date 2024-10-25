@@ -175,10 +175,11 @@ namespace PIKA_DETAIL_NS_DEBUG {
     // ------------------------------------------------------------------
     struct mem_crc32
     {
-        PIKA_EXPORT mem_crc32(void const* a, std::size_t len);
+        PIKA_EXPORT mem_crc32(void const* a, std::size_t len, std::size_t wrap = 8);
 
         std::uint64_t const* addr_;
         std::size_t const len_;
+        std::size_t const wrap_;
 
         PIKA_EXPORT friend std::ostream& operator<<(std::ostream& os, mem_crc32 const& p);
     };

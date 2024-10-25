@@ -107,9 +107,10 @@ namespace PIKA_DETAIL_NS_DEBUG {
         return result.checksum();
     }
 
-    mem_crc32::mem_crc32(void const* a, std::size_t len)
+    mem_crc32::mem_crc32(void const* a, std::size_t len, std::size_t wrap)
       : addr_(reinterpret_cast<uint64_t const*>(a))
       , len_(len)
+      , wrap_(wrap)
     {
     }
 
@@ -125,7 +126,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
              i++)
         {
             os << ffmt<hex16>(*uintBuf++) << " ";
-            if (i % 4 == 3) os << "\n";
+            if (i % p.wrap_ == (p.wrap_ - 1)) os << "\n";
         }
         return os;
     }

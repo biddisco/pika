@@ -125,7 +125,7 @@ namespace pika::mpi::experimental::detail {
                             using invoke_result_type = mpi_request_invoke_result_t<F, Ts...>;
 
                             PIKA_DETAIL_DP(
-                                mpi_tran<5>, debug(str<>("dispatch_mpi_recv"), "set_value_t"));
+                                mpi_tran<5>, debug(ffmt<s20>("dispatch_mpi_recv"), "set_value_t"));
 #ifdef PIKA_HAVE_APEX
                             apex::scoped_timer apex_post("pika::mpi::post");
 #endif
@@ -143,7 +143,7 @@ namespace pika::mpi::experimental::detail {
                                 status = PIKA_INVOKE(std::move(r.op_state.f), ts..., &request);
                             }
                             PIKA_DETAIL_DP(mpi_tran<7>,
-                                debug(str<>("dispatch_mpi_recv"), "invoke mpi", ptr(request)));
+                                debug(ffmt<s20>("dispatch_mpi_recv"), "invoke mpi", ptr(request)));
 
                             PIKA_ASSERT_MSG(request != MPI_REQUEST_NULL,
                                 "MPI_REQUEST_NULL returned from mpi invocation");
@@ -151,7 +151,7 @@ namespace pika::mpi::experimental::detail {
                             if (status != MPI_SUCCESS)
                             {
                                 PIKA_DETAIL_DP(mpi_tran<5>,
-                                    debug(str<>("set_error"), "status != MPI_SUCCESS",
+                                    debug(ffmt<s20>("set_error"), "status != MPI_SUCCESS",
                                         mpi::detail::error_message(status)));
                                 ex::set_error(std::move(r.op_state.receiver),
                                     std::make_exception_ptr(
@@ -189,7 +189,7 @@ namespace pika::mpi::experimental::detail {
               , f(std::forward<F_>(f))
               , op_state(ex::connect(std::forward<Sender_>(sender), dispatch_mpi_receiver{*this}))
             {
-                PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("operation_state")));
+                PIKA_DETAIL_DP(mpi_tran<5>, debug(ffmt<s20>("operation_state")));
             }
 
             friend constexpr auto tag_invoke(ex::start_t, operation_state& os) noexcept

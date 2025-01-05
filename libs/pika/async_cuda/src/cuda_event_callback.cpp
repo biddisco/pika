@@ -92,7 +92,7 @@ namespace pika::cuda::experimental::detail {
                     if (cud_debug<5>.is_enabled())
                     {
                         static auto poll_deb =
-                            cud_debug<5>.make_timer(1, str<>("Poll - lock failed"));
+                            cud_debug<5>.make_timer(1, ffmt<s20>("Poll - lock failed"));
                         cud_debug<5>.timed(poll_deb, "enqueued events",
                             ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                             ffmt<dec3>(get_number_of_active_events()));
@@ -102,7 +102,7 @@ namespace pika::cuda::experimental::detail {
 
                 if (cud_debug<5>.is_enabled())
                 {
-                    static auto poll_deb = cud_debug<5>.make_timer(1, str<>("Poll - lock success"));
+                    static auto poll_deb = cud_debug<5>.make_timer(1, ffmt<s20>("Poll - lock success"));
                     cud_debug<5>.timed(poll_deb, "enqueued events",
                         ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                         ffmt<dec3>(get_number_of_active_events()));
@@ -133,7 +133,7 @@ namespace pika::cuda::experimental::detail {
 
                             // Forward successes and other errors to the callback
                             PIKA_DETAIL_DP(cud_debug<5>,
-                                debug(str<>("set ready vector"), "event",
+                                debug(ffmt<s20>("set ready vector"), "event",
                                     ffmt<hex8>(continuation.event), "enqueued events",
                                     ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                                     ffmt<dec3>(get_number_of_active_events())));
@@ -166,7 +166,7 @@ namespace pika::cuda::experimental::detail {
                     }
 
                     PIKA_DETAIL_DP(cud_debug<5>,
-                        debug(str<>("set ready queue"), "event",
+                        debug(ffmt<s20>("set ready queue"), "event",
                             ffmt<hex8>(continuation.event), "enqueued events",
                             ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                             ffmt<dec3>(get_number_of_active_events())));
@@ -204,7 +204,7 @@ namespace pika::cuda::experimental::detail {
                 "polling is enabled on at least one thread pool.");
 
             PIKA_DETAIL_DP(cud_debug<5>,
-                debug(str<>("event queued"), "event", ffmt<hex8>(event), "enqueued events",
+                debug(ffmt<s20>("event queued"), "event", ffmt<hex8>(event), "enqueued events",
                     ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                     ffmt<dec3>(get_number_of_active_events())));
 
@@ -238,7 +238,7 @@ namespace pika::cuda::experimental::detail {
             ++active_events_counter;
 
             PIKA_DETAIL_DP(cud_debug<5>,
-                debug(str<>("event callback moved from queue to vector"), "event",
+                debug(ffmt<s20>("event callback moved from queue to vector"), "event",
                     ffmt<hex8>(continuation.event), "enqueued events",
                     ffmt<dec3>(get_number_of_enqueued_events()), "active events",
                     ffmt<dec3>(get_number_of_active_events())));
@@ -316,7 +316,7 @@ namespace pika::cuda::experimental::detail {
         // pre-create CUDA/HIP events
         cuda_event_pool::get_event_pool().grow(cuda_event_pool::initial_events_in_pool);
 
-        PIKA_DETAIL_DP(cud_debug<2>, debug(str<>("enable polling"), pool.get_pool_name()));
+        PIKA_DETAIL_DP(cud_debug<2>, debug(ffmt<s20>("enable polling"), pool.get_pool_name()));
         auto* sched = pool.get_scheduler();
         sched->set_cuda_polling_functions(&pika::cuda::experimental::detail::poll, &get_work_count);
     }
@@ -331,7 +331,7 @@ namespace pika::cuda::experimental::detail {
                 "sure CUDA event polling is not disabled too early.");
         }
 #endif
-        PIKA_DETAIL_DP(cud_debug<2>, debug(str<>("disable polling"), pool.get_pool_name()));
+        PIKA_DETAIL_DP(cud_debug<2>, debug(ffmt<s20>("disable polling"), pool.get_pool_name()));
         auto* sched = pool.get_scheduler();
         sched->clear_cuda_polling_function();
     }
@@ -353,7 +353,7 @@ namespace pika::cuda::experimental {
 
     PIKA_EXPORT void set_pool_name(std::string const& name)
     {
-        PIKA_DETAIL_DP(detail::cud_debug<2>, debug(str<>("set pool name"), name));
+        PIKA_DETAIL_DP(detail::cud_debug<2>, debug(ffmt<s20>("set pool name"), name));
         detail::polling_pool_name = name;
     }
 }    // namespace pika::cuda::experimental

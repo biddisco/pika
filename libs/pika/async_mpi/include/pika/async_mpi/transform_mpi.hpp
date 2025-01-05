@@ -46,7 +46,7 @@ namespace pika::mpi::experimental {
         tag_fallback_invoke(transform_mpi_t, Sender&& sender, F&& f)
         {
             using namespace pika::mpi::experimental::detail;
-            PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("transform_mpi_t"), "tag_fallback_invoke"));
+            PIKA_DETAIL_DP(mpi_tran<5>, debug(ffmt<s20>("transform_mpi_t"), "tag_fallback_invoke"));
 
             using execution::thread_priority;
             using pika::execution::experimental::continues_on;

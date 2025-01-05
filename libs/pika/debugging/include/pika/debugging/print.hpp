@@ -37,7 +37,7 @@
 //
 // Later in code you may print information using
 //
-//             spq_deb.debug(str<16>("cleanup_terminated"), "v1"
+//             spq_deb.debug(ffmt<s16>("cleanup_terminated"), "v1"
 //                  , "D" , dec<2>(domain_num)
 //                  , "Q" , ffmt<dec3>(q_index)
 //                  , "thread_num", ffmt<dec3>(local_num));
@@ -49,7 +49,7 @@
 // produced, so a simple timer based output is provided
 // To instantiate a timed output
 //      static auto getnext = spq_deb.make_timer(1
-//              , str<16>("get_next_thread"));
+//              , ffmt<s16>("get_next_thread"));
 // then inside a tight loop
 //      spq_deb.timed(getnext, dec<>(thread_num));
 // The output will only be produced every N seconds
@@ -89,6 +89,14 @@ namespace PIKA_DETAIL_NS_DEBUG {
     constexpr char fp12_8[] = "{:12.8f}";    // a commmon layout
     constexpr char strl[] = "{:<{}}";
     constexpr char strr[] = "{:>{}}";
+    constexpr char s20[] = "{:>20}";
+    constexpr char s16[] = "{:>16}";
+    constexpr char s15[] = "{:>15}";
+    constexpr char s12[] = "{:>12}";
+    constexpr char s10[] = "{:>10}";
+    constexpr char s8[] = "{:>8}";
+    constexpr char s6[] = "{:>6}";
+    constexpr char s3[] = "{:>3}";
 
     // ------------------------------------------------------------------
     // helper for N>M true/false
@@ -101,12 +109,12 @@ namespace PIKA_DETAIL_NS_DEBUG {
     // ------------------------------------------------------------------
     // format using fmt::format
     // ------------------------------------------------------------------
-    template <const char* fmt_str>
+    template <char const* fmt_str>
     struct ffmt
     {
-        template <typename T>
-        ffmt(T const& val)
-          : fmt_(fmt::format(fmt_str, val))
+        template <typename T, typename... Args>
+        ffmt(T const& val, Args... args)
+          : fmt_(fmt::format(fmt_str, val, args...))
         {
         }
 
@@ -116,7 +124,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
         {
         }
 
-        const std::string fmt_;
+        std::string const fmt_;
 
         constexpr friend std::ostream& operator<<(std::ostream& os, ffmt const& d)
         {
@@ -130,12 +138,12 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template <int N = 20>
     struct str
     {
-        str(const char* val)
+        str(char const* val)
           : fmt_(fmt::format(strl, val, N))
         {
         }
 
-        const std::string fmt_;
+        std::string const fmt_;
 
         friend std::ostream& operator<<(std::ostream& os, str<N> const& d) { return os << d.fmt_; }
     };
@@ -279,10 +287,10 @@ namespace PIKA_DETAIL_NS_DEBUG {
             std::stringstream tempstream;
             tuple_print(tempstream, message_);
             buffered_msg = tempstream.str();
-            display("<SCO> ", prefix_, str<>(">> enter <<"), tempstream.str());
+            display("<SCO> ", prefix_, ffmt<s20>(">> enter <<"), tempstream.str());
         }
 
-        ~scoped_var() { display("<SCO> ", prefix_, str<>("<< leave >>"), buffered_msg); }
+        ~scoped_var() { display("<SCO> ", prefix_, ffmt<s20>("<< leave >>"), buffered_msg); }
     };
 
     struct empty_timed_var

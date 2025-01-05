@@ -126,7 +126,7 @@ namespace pika::mpi::experimental::detail {
                         apex::scoped_timer apex_ invoke("pika::mpi::trigger");
 #endif
                         PIKA_DETAIL_DP(mpi_tran<7>,
-                            debug(str<>("trigger_mpi_recv"), "eager poll ok", ptr(request)));
+                            debug(ffmt<s20>("trigger_mpi_recv"), "eager poll ok", ptr(request)));
                         ex::set_value(std::move(r.op_state.receiver));
                         return;
                     }
@@ -140,7 +140,7 @@ namespace pika::mpi::experimental::detail {
                         execution::thread_priority::normal;
 
                     PIKA_DETAIL_DP(mpi_tran<5>,
-                        debug(str<>("trigger_mpi_recv"), "set_value_t", "req",
+                        debug(ffmt<s20>("trigger_mpi_recv"), "set_value_t", "req",
                             ptr(r.op_state.request), "flags", bin<8>(r.op_state.mode_flags),
                             mode_string(r.op_state.mode_flags)));
 
@@ -208,7 +208,7 @@ namespace pika::mpi::experimental::detail {
                             case handler_method::mpix_continuation:
                             {
                                 PIKA_DETAIL_DP(mpi_tran<1>,
-                                    debug(str<>("MPI_EXT_CONTINUE"), "register_mpix_continuation",
+                                    debug(ffmt<s20>("MPI_EXT_CONTINUE"), "register_mpix_continuation",
                                         ptr(r.op_state.request), ptr(r.op_state.request)));
                                 MPIX_Continue_cb_function* func =
                                     &mpix_callback_continuation<operation_state>;

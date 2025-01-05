@@ -118,8 +118,8 @@ inline std::uint32_t prev_rank(std::uint32_t rank, std::uint32_t size)
 inline std::uint32_t make_tag(std::uint32_t rank, std::uint32_t iteration, std::uint32_t ranks)
 {
     std::int64_t tag = (rank + (iteration * ranks)) & 0xffff'ffff;
-    msr_deb<7>.debug(
-        str<>("generating tag"), std::uint32_t(tag), "rank/s", rank, ranks, "iteration", iteration);
+    msr_deb<7>.debug(ffmt<s20>("generating tag"), std::uint32_t(tag), "rank/s", rank, ranks,
+        "iteration", iteration);
     return std::uint32_t(tag);
 }
 
@@ -142,7 +142,7 @@ void msg_info(
         std::stringstream temp;
         temp << dec<3>(rank) << "/" << dec<3>(size);
         // clang-format off
-        msr_deb<1>.debug(str<>(temp.str().c_str())
+        msr_deb<1>.debug(ffmt<s20>(temp.str().c_str())
                          , "token", hex<4>(h.token_val_)
                          , dec<3>(rank), "<-->", dec<3>(other), msg
                          , "tag", dec<3>(h.tag)
@@ -150,7 +150,7 @@ void msg_info(
                          , "round", dec<3>(h.round)
                          , "step", dec<3>(h.step)
                          , "origin", dec<3>(h.origin_rank)
-                         , str<12>((xmsg == nullptr) ? "" : xmsg)
+                         , ffmt<s12>((xmsg == nullptr) ? "" : xmsg)
                          , "counter", std::int64_t(counter));
         // clang-format on
     }
@@ -181,7 +181,7 @@ message_buffer* get_msg_buffer(header h)
     }
     // set initial token to some easy to spot default
     message_buffers_size_++;
-    msr_deb<6>.debug(str<>("message_buffers"), std::uint32_t(message_buffers_size_.load()));
+    msr_deb<6>.debug(ffmt<s20>("message_buffers"), std::uint32_t(message_buffers_size_.load()));
     return buffer;
 }
 
@@ -194,7 +194,7 @@ void release_msg_buffer(message_buffer* buffer)
     char* data = reinterpret_cast<char*>(buffer);
     delete[] data;
 #endif
-    msr_deb<6>.debug(str<>("message_buffers"), std::uint32_t(message_buffers_size_.load()));
+    msr_deb<6>.debug(ffmt<s20>("message_buffers"), std::uint32_t(message_buffers_size_.load()));
 }
 
 struct buffer_cleaner_upper
@@ -244,7 +244,7 @@ struct message_receiver
         buf->header_.round = buf->header_.token_val_ / size;
         buf->header_.step = buf->header_.token_val_ % size;
 
-        msr_deb<2>.debug(str<>("operator"), rank, size, "tag", dec<3>(buf->header_.tag),
+        msr_deb<2>.debug(ffmt<s20>("operator"), rank, size, "tag", dec<3>(buf->header_.tag),
             "iteration", buf->header_.iteration, "round", buf->header_.round, "step",
             buf->header_.step);
 
@@ -257,8 +257,8 @@ struct message_receiver
                 throw std::runtime_error("Ring should have terminated before now");
             }
             msg_info(rank, size, msg_type::recv, buf->header_, "complete");
-            // msr_deb<0>.debug(str<>("release"), buf->header_.iteration);
-            msr_deb<2>.debug(str<>("release"), "tag", buf->header_.tag);
+            // msr_deb<0>.debug(ffmt<s20>("release"), buf->header_.iteration);
+            msr_deb<2>.debug(ffmt<s20>("release"), "tag", buf->header_.tag);
             release_msg_buffer(buf);
             limiter->release();
         }
@@ -280,8 +280,8 @@ struct message_receiver
                     });
 
                 // launch the forwarding send for the current round
-                msr_deb<6>.debug(
-                    str<>("start_detached"), "tx_snd2", buf2->header_.round, buf2->header_.step);
+                msr_deb<6>.debug(ffmt<s20>("start_detached"), "tx_snd2", buf2->header_.round,
+                    buf2->header_.step);
                 ex::start_detached(std::move(tx_snd2));
             };
 
@@ -303,8 +303,8 @@ struct message_receiver
                         mpix::transform_mpi(MPI_Irecv /*, mpix::stream_type::receive_2*/) |
                         ex::then(std::move(reclambda));
                     // launch the receive for the msg on the next round
-                    msr_deb<6>.debug(
-                        str<>("start_detached"), "rx_snd2", buf->header_.round, buf->header_.step);
+                    msr_deb<6>.debug(ffmt<s20>("start_detached"), "rx_snd2", buf->header_.round,
+                        buf->header_.step);
                     ex::start_detached(std::move(rx_snd2));
                 }
                 else { release_msg_buffer(buf); }
@@ -380,7 +380,7 @@ int pika_main(pika::program_options::variables_map& vm)
         // for each iteration (number of times we loop over the ranks)
         for (std::uint32_t i = 0; i < iterations; ++i)
         {
-            msr_deb<3>.debug(str<>("acquire"), i);
+            msr_deb<3>.debug(ffmt<s20>("acquire"), i);
             limiter->acquire();
 
             auto f_send = [&] {
@@ -398,7 +398,7 @@ int pika_main(pika::program_options::variables_map& vm)
                         release_msg_buffer(sbuf);
                     });
                 msg_info(rank, size, msg_type::send, sbuf->header_, "send");
-                msr_deb<6>.debug(str<>("start_detached"), "send_snd", i);
+                msr_deb<6>.debug(ffmt<s20>("start_detached"), "send_snd", i);
                 ex::start_detached(std::move(send_snd));
             };
 
@@ -423,7 +423,7 @@ int pika_main(pika::program_options::variables_map& vm)
                                        prev_rank(rank, size), tag, MPI_COMM_WORLD) |
                         mpix::transform_mpi(MPI_Irecv /*, mpix::stream_type::receive_1*/) |
                         ex::then(std::move(reclambda));
-                    msr_deb<6>.debug(str<>("start_detached"), "rx_snd1", i, orank);
+                    msr_deb<6>.debug(ffmt<s20>("start_detached"), "rx_snd1", i, orank);
                     ex::start_detached(std::move(rx_snd1));
                 }
             };
@@ -445,7 +445,7 @@ int pika_main(pika::program_options::variables_map& vm)
         if (output)
         {
             // clang-format off
-            msr_deb<0>.debug(str<>("User Messages")
+            msr_deb<0>.debug(ffmt<s20>("User Messages")
                 , "Rank", dec<3>(rank), "of", dec<3>(size)
                 , "Counter", hex<8>(std::uint32_t(counter.load()))
                 , "in-flight", dec<3>(mpix::get_work_count()));
@@ -541,7 +541,7 @@ int main(int argc, char* argv[])
     MPI_Init_thread(&argc, &argv, preferred, &provided);
     if (provided != preferred)
     {
-        msr_deb<0>.error(str<>("Caution"), "Provided MPI is not as requested");
+        msr_deb<0>.error(ffmt<s20>("Caution"), "Provided MPI is not as requested");
     }
 
     // -----------------

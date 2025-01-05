@@ -220,7 +220,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
             // we are about to recv, so increment our counter
             ++recvs_in_flight;
             // clang-format off
-            nws_deb<5>.debug(deb::str<>("posting recv"),
+            nws_deb<5>.debug(deb::ffmt<s20>("posting recv"),
                              "Rank ", deb::dec<3>(rank),
                              "recv block ", deb::hex<8>(read_slot),
                              "<- rank", deb::dec<4>(recv_rank),
@@ -233,7 +233,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
                             recv_rank, tag, MPI_COMM_WORLD) |
                 mpi::transform_mpi(MPI_Irecv) | ex::then([&]() {
                     --recvs_in_flight;
-                    nws_deb<5>.debug(deb::str<>("recv complete"), "recv in flight", recvs_in_flight,
+                    nws_deb<5>.debug(deb::ffmt<s20>("recv complete"), "recv in flight", recvs_in_flight,
                         "send in flight", sends_in_flight);
                 });
             ex::start_detached(std::move(rsnd));
@@ -241,7 +241,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
             // we are about to send, so increment our counter
             ++sends_in_flight;
             // clang-format off
-            nws_deb<5>.debug(deb::str<>("posting send"),
+            nws_deb<5>.debug(deb::ffmt<s20>("posting send"),
                              "Rank ", deb::dec<3>(rank),
                              "send block ", deb::hex<8>(write_slot),
                              "-> rank", deb::dec<4>(send_rank),
@@ -254,7 +254,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
                             send_rank, tag, MPI_COMM_WORLD) |
                 mpi::transform_mpi(MPI_Isend) | ex::then([&]() {
                     --sends_in_flight;
-                    nws_deb<5>.debug(deb::str<>("send complete"), "recv in flight", recvs_in_flight,
+                    nws_deb<5>.debug(deb::ffmt<s20>("send complete"), "recv in flight", recvs_in_flight,
                         "send in flight", sends_in_flight);
                 });
             launch_on_default_pool(std::move(ssnd));
@@ -298,7 +298,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
     nws_deb<2>.debug("Time elapsed", "on rank", rank, "counter", deb::dec<8>(messages_sent));
 
     // block until no messages are in flight
-    nws_deb<2>.debug(deb::str<>("pre final"), "Rank ", rank, "recvs in flight",
+    nws_deb<2>.debug(deb::ffmt<s20>("pre final"), "Rank ", rank, "recvs in flight",
         deb::dec<>(recvs_in_flight), "sends in flight", deb::dec<>(sends_in_flight));
     //
     while ((sends_in_flight.load() + recvs_in_flight.load()) > 0)
@@ -308,7 +308,7 @@ void test_send_recv(std::uint32_t rank, std::uint32_t nranks, std::mt19937& gen,
             nws_deb<5>.debug("Rank ", rank, "counter", deb::dec<8>(messages_sent));
     }
     //
-    nws_deb<2>.debug(deb::str<>("final"), "Rank ", rank, "recvs in flight",
+    nws_deb<2>.debug(deb::ffmt<s20>("final"), "Rank ", rank, "recvs in flight",
         deb::dec<>(recvs_in_flight), "sends in flight", deb::dec<>(sends_in_flight));
 
     // ----------------------------------------------------------------
@@ -347,7 +347,7 @@ int pika_main(pika::program_options::variables_map& vm)
     mpi_env.init(nullptr, nullptr, required, minimal, provided);
 
     pika::chrono::detail::high_resolution_timer timer_main;
-    nws_deb<2>.debug(deb::str<>("PIKA main"));
+    nws_deb<2>.debug(deb::ffmt<s20>("PIKA main"));
     //
     std::string name = mpi_env.get_processor_name();
     std::uint64_t rank = mpi_env.rank();

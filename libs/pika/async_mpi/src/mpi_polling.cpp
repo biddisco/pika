@@ -200,7 +200,7 @@ namespace pika::mpi::experimental {
         {
             std::uint32_t val =
                 pika::detail::get_env_var_as<std::uint32_t>("PIKA_MPI_POLLING_SIZE", 8);
-            PIKA_DETAIL_DP(mpi_debug<2>, debug(str<>("Poll size"), dec<3>(val)));
+            PIKA_DETAIL_DP(mpi_debug<2>, debug(ffmt<s20>("Poll size"), dec<3>(val)));
             mpi_data_.max_polling_requests = val;
             return val;
         }
@@ -229,7 +229,7 @@ namespace pika::mpi::experimental {
                 {std::move(req_callback.callback_function_), MPI_SUCCESS, req_callback.request_});
 
             PIKA_DETAIL_DP(mpi_debug<5>,
-                debug(str<>("CB queue => vector"), mpi_data_, ptr(req_callback.request_), "nulls",
+                debug(ffmt<s20>("CB queue => vector"), mpi_data_, ptr(req_callback.request_), "nulls",
                     dec<3>(get_num_null_requests_in_vector())));
         }
 
@@ -242,7 +242,7 @@ namespace pika::mpi::experimental {
             ++mpi_data_.all_in_flight_;
             //
             PIKA_DETAIL_DP(
-                mpi_debug<5>, debug(str<>("CB queued"), ptr(req_callback.request_), mpi_data_));
+                mpi_debug<5>, debug(ffmt<s20>("CB queued"), ptr(req_callback.request_), mpi_data_));
 
             // can skip the queue and go direct to the polling vector when singlethreaded
             if (mpi_data_.single_thread_mode_)
@@ -279,7 +279,7 @@ namespace pika::mpi::experimental {
         void pika_MPI_Handler(MPI_Comm*, int* errorcode, ...)
         {
             PIKA_DETAIL_DP(mpi_debug<5>,
-                debug(str<>("pika_MPI_Handler"), mpi::detail::error_message(*errorcode)));
+                debug(ffmt<s20>("pika_MPI_Handler"), mpi::detail::error_message(*errorcode)));
             throw mpi::exception(*errorcode, "pika MPI error->exception handler");
         }
 
@@ -288,7 +288,7 @@ namespace pika::mpi::experimental {
         // on any error instead of the default behavior of program termination
         void set_error_handler()
         {
-            PIKA_DETAIL_DP(mpi_debug<5>, debug(str<>("set_error_handler")));
+            PIKA_DETAIL_DP(mpi_debug<5>, debug(ffmt<s20>("set_error_handler")));
 
             MPI_Comm_create_errhandler(detail::pika_MPI_Handler, &detail::pika_mpi_errhandler);
             MPI_Comm_set_errhandler(MPI_COMM_WORLD, detail::pika_mpi_errhandler);
@@ -298,7 +298,7 @@ namespace pika::mpi::experimental {
         {
             int flag;
             MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
-            if (flag) { PIKA_DETAIL_DP(mpi_debug<5>, debug(str<>("poll MPI_Test ok"), req)); }
+            if (flag) { PIKA_DETAIL_DP(mpi_debug<5>, debug(ffmt<s20>("poll MPI_Test ok"), req)); }
             return flag;
         }
 
@@ -338,7 +338,7 @@ namespace pika::mpi::experimental {
         pika::threads::detail::polling_status try_mpix_polling()
         {
             PIKA_DETAIL_DP(mpi_debug<5>,
-                debug(str<>("mpix check"), ptr(mpi_data_.mpix_continuations_request)));
+                debug(ffmt<s20>("mpix check"), ptr(mpi_data_.mpix_continuations_request)));
 
             using pika::threads::detail::polling_status;
             if (!mpi_data_.mpix_ready_.load(std::memory_order_relaxed))
@@ -368,7 +368,7 @@ namespace pika::mpi::experimental {
                 }
             }
             // for debugging, create a timer : debug info every N seconds
-            static auto mpix_deb = mpi_debug<1>.make_timer(2, debug::detail::str<>("MPIX"), "poll");
+            static auto mpix_deb = mpi_debug<1>.make_timer(2, debug::detail::ffmt<s20>("MPIX"), "poll");
             PIKA_DETAIL_DP(mpi_debug<1>,
                 timed(mpix_deb, ptr(mpi_data_.mpix_continuations_request), "Flag", flag));
 
@@ -394,7 +394,7 @@ namespace pika::mpi::experimental {
                 apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
                 PIKA_DETAIL_DP(mpi_debug<4>,
-                    debug(str<>("Ready CB invoke"), ptr(ready_callback_.request_),
+                    debug(ffmt<s20>("Ready CB invoke"), ptr(ready_callback_.request_),
                         ready_callback_.err_));
 
                 // decrement before invoking callback : race if invoked code checks in_flight
@@ -419,7 +419,7 @@ namespace pika::mpi::experimental {
                     {
                         // for debugging, create a timer : debug info every N seconds
                         static auto poll_deb =
-                            mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock failed"));
+                            mpi_debug<5>.make_timer(2, debug::detail::ffmt<s20>("Poll - lock failed"));
                         PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
                     }
                     return polling_status::idle;
@@ -429,7 +429,7 @@ namespace pika::mpi::experimental {
                 {
                     // for debugging, create a timer : debug info every N seconds
                     static auto poll_deb =
-                        mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock success"));
+                        mpi_debug<5>.make_timer(2, debug::detail::ffmt<s20>("Poll - lock success"));
                     PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
                 }
 
@@ -473,7 +473,7 @@ namespace pika::mpi::experimental {
                             {
                                 event_handled = true;
                                 PIKA_DETAIL_DP(mpi_debug<4>,
-                                    debug(str<>("MPI_Testsome"), mpi_data_, "num_completed",
+                                    debug(ffmt<s20>("MPI_Testsome"), mpi_data_, "num_completed",
                                         dec<3>(num_completed)));
 
                                 // for each completed request
@@ -519,7 +519,7 @@ namespace pika::mpi::experimental {
             if constexpr (mpi_debug<4>.is_enabled())
             {
                 static auto poll_deb =
-                    mpi_debug<4>.make_timer(1, debug::detail::str<>("Poll - success"));
+                    mpi_debug<4>.make_timer(1, debug::detail::ffmt<s20>("Poll - success"));
                 PIKA_DETAIL_DP(mpi_debug<4>, timed(poll_deb, mpi_data_));
             }
 
@@ -530,7 +530,7 @@ namespace pika::mpi::experimental {
                 apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
                 PIKA_DETAIL_DP(mpi_debug<5>,
-                    debug(str<>("CB invoke"), ptr(ready_callback_.request_), ready_callback_.err_));
+                    debug(ffmt<s20>("CB invoke"), ptr(ready_callback_.request_), ready_callback_.err_));
 
                 // decrement before invoking callback : race if invoked code checks in_flight
                 --mpi_data_.all_in_flight_;
@@ -561,7 +561,7 @@ namespace pika::mpi::experimental {
             {
                 // for debugging, create a timer : debug info every N seconds
                 static auto poll_deb =
-                    mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock success"));
+                    mpi_debug<5>.make_timer(2, debug::detail::ffmt<s20>("Poll - lock success"));
                 PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
             }
 
@@ -586,7 +586,7 @@ namespace pika::mpi::experimental {
 
                     PIKA_DETAIL_DP(mpi_debug<5>,
                         debug(
-                            str<>("CB invoke"), ptr(mpi_data_.callbacks_[index].request_), status));
+                            ffmt<s20>("CB invoke"), ptr(mpi_data_.callbacks_[index].request_), status));
 
                     // Remove the request from our vector to prevent retesting
                     mpi_data_.requests_[index] = MPI_REQUEST_NULL;
@@ -604,7 +604,7 @@ namespace pika::mpi::experimental {
             if constexpr (mpi_debug<4>.is_enabled())
             {
                 static auto poll_deb =
-                    mpi_debug<4>.make_timer(1, debug::detail::str<>("Poll - success"));
+                    mpi_debug<4>.make_timer(1, debug::detail::ffmt<s20>("Poll - success"));
                 PIKA_DETAIL_DP(mpi_debug<4>, timed(poll_deb, mpi_data_));
             }
 
@@ -634,7 +634,7 @@ namespace pika::mpi::experimental {
             if (mpi_data_.rank_ == 0)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("polling_enabled"), "pool =", pool.get_pool_name(), ", mode",
+                    debug(ffmt<s20>("polling_enabled"), "pool =", pool.get_pool_name(), ", mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
             }
             auto* sched = pool.get_scheduler();
@@ -645,7 +645,7 @@ namespace pika::mpi::experimental {
             if (mpi_data_.single_thread_mode_)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("single_thread_mode_"), "pool =", pool.get_pool_name(), ", mode",
+                    debug(ffmt<s20>("single_thread_mode_"), "pool =", pool.get_pool_name(), ", mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
             }
 #ifdef OMPI_HAVE_MPI_EXT_CONTINUE
@@ -682,7 +682,7 @@ namespace pika::mpi::experimental {
             }
 #endif
             PIKA_DETAIL_DP(mpi_debug<1>,
-                debug(str<>("disable polling"), "pool =", pool.get_pool_name(), ", mode",
+                debug(ffmt<s20>("disable polling"), "pool =", pool.get_pool_name(), ", mode",
                     mode_string(get_completion_mode()), get_completion_mode()));
             auto* sched = pool.get_scheduler();
             sched->clear_mpi_polling_function();
@@ -696,7 +696,7 @@ namespace pika::mpi::experimental {
             if (detail::get_handler_method(mode) != handler_method::yield_while)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("enabling polling"), "pool =", get_pool_name(), ", mode",
+                    debug(ffmt<s20>("enabling polling"), "pool =", get_pool_name(), ", mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
                 detail::register_polling(pika::resource::get_thread_pool(get_pool_name()));
             }
@@ -708,7 +708,7 @@ namespace pika::mpi::experimental {
             MPI_Request* request, MPIX_Continue_cb_function* cb_func, void* op_state)
         {
             PIKA_DETAIL_DP(
-                mpi_debug<2>, debug(str<>("MPIX"), "register continuation", ptr(request)));
+                mpi_debug<2>, debug(ffmt<s20>("MPIX"), "register continuation", ptr(request)));
             mpi_ext_continuation_result_check(MPIX_Continue(request, cb_func, op_state,
                 /*MPIX_CONT_DEFER_COMPLETE | */ MPIX_CONT_POLL_ONLY | MPIX_CONT_INVOKE_FAILED,
                 MPI_STATUSES_IGNORE, mpi_data_.mpix_continuations_request));
@@ -718,7 +718,7 @@ namespace pika::mpi::experimental {
         {
             {
                 PIKA_DETAIL_DP(mpi_debug<2>,
-                    debug(str<>("MPIX"), "MPI_Start", ptr(mpi_data_.mpix_continuations_request)));
+                    debug(ffmt<s20>("MPIX"), "MPI_Start", ptr(mpi_data_.mpix_continuations_request)));
                 mpi_ext_continuation_result_check(MPI_Start(&mpi_data_.mpix_continuations_request));
             }
         }
@@ -732,7 +732,7 @@ namespace pika::mpi::experimental {
         void init_resource_partitioner_handler(pika::resource::partitioner& rp,
             pika::program_options::variables_map const&, polling_pool_creation_mode mode)
         {
-            PIKA_DETAIL_DP(detail::mpi_debug<2>, debug(str<>("init RP"), "create_pool"));
+            PIKA_DETAIL_DP(detail::mpi_debug<2>, debug(ffmt<s20>("init RP"), "create_pool"));
             create_pool(rp, "", mode);
         }
 
@@ -763,7 +763,7 @@ namespace pika::mpi::experimental {
                 PIKA_THROW_EXCEPTION(pika::error::bad_parameter, "mpi::register",
                     "Register failed '{}' does not exist", pool_name);
             PIKA_DETAIL_DP(
-                mpi_debug<1>, debug(str<>("register_pool"), "pool =", polling_pool_name_));
+                mpi_debug<1>, debug(ffmt<s20>("register_pool"), "pool =", polling_pool_name_));
         }
 
         // -------------------------------------------------------------
@@ -774,7 +774,7 @@ namespace pika::mpi::experimental {
             if (detail::get_handler_method(mode) != handler_method::yield_while)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("disabling polling"), "pool =", get_pool_name(), ", mode",
+                    debug(ffmt<s20>("disabling polling"), "pool =", get_pool_name(), ", mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
                 detail::unregister_polling(pika::resource::get_thread_pool(get_pool_name()));
             }
@@ -836,7 +836,7 @@ namespace pika::mpi::experimental {
                 register_pool(name);
             }
             PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                debug(str<>("create_pool"), (do_create ? "created" : "skipped"), "name",
+                debug(ffmt<s20>("create_pool"), (do_create ? "created" : "skipped"), "name",
                     get_pool_name(), "mode flags", bin<8>(detail::completion_flags_)));
             return do_create;
         }
@@ -870,7 +870,7 @@ namespace pika::mpi::experimental {
             detail::mpi_data_.optimizations_)
         {
             required = MPI_THREAD_SINGLE;
-            PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(str<>("MPI_THREAD_SINGLE"), "overridden"));
+            PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(ffmt<s20>("MPI_THREAD_SINGLE"), "overridden"));
         }
         return required;
     }
@@ -892,7 +892,7 @@ namespace pika::mpi::experimental {
     {
         // don't allow polling code to run until init has completed
         std::lock_guard<detail::mutex_type> lk(detail::mpi_data_.polling_vector_mtx_);
-        PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(str<>("start_polling"), detail::mpi_data_));
+        PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(ffmt<s20>("start_polling"), detail::mpi_data_));
 
         if (pool_name.empty())
         {
@@ -932,7 +932,7 @@ namespace pika::mpi::experimental {
                 MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpix_continuations_request));
 
             PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                debug(str<>("MPIX"), "Enabled,", "pool =", get_pool_name(), ", mode",
+                debug(ffmt<s20>("MPIX"), "Enabled,", "pool =", get_pool_name(), ", mode",
                     detail::mode_string(get_completion_mode()), get_completion_mode(),
                     ptr(detail::mpi_data_.mpix_continuations_request)));
             // it is now safe to use the mpix request, {memory_order = not a critical code path}
@@ -987,7 +987,7 @@ namespace pika::mpi::experimental {
         }
 
         // clean up if we initialized mpi
-        PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(str<>("finalize"), detail::mpi_data_));
+        PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(ffmt<s20>("finalize"), detail::mpi_data_));
         mpi::detail::environment::finalize();
     }
 

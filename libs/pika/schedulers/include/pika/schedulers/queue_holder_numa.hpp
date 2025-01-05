@@ -97,7 +97,7 @@ namespace pika::threads::detail {
                 if (queues_[q]->get_next_thread_HP(thrd, (stealing || (i > 0)), i == 0))
                 {
                     // clang-format off
-                    nq_deb.debug(str<>("HP/BP get_next")
+                    nq_deb.debug(ffmt<s20>("HP/BP get_next")
                          , "D", ffmt<dec3>(domain_)
                          , "Q",  ffmt<dec3>(q)
                          , "Qidx",  ffmt<dec3>(qidx)
@@ -127,7 +127,7 @@ namespace pika::threads::detail {
                 // if we got a thread, return it, only allow stealing if i>0
                 if (queues_[q]->get_next_thread(thrd, (stealing || (i > 0))))
                 {
-                    nq_deb.debug(str<>("get_next"), "D",
+                    nq_deb.debug(ffmt<s20>("get_next"), "D",
                         ffmt<dec3>(domain_), "Q", ffmt<dec3>(q), "Qidx",
                         ffmt<dec3>(qidx),
                         ((i == 0 && !stealing) ? "taken" : "stolen from"),
@@ -154,7 +154,7 @@ namespace pika::threads::detail {
                 if (added > 0)
                 {
                     // clang-format off
-                    nq_deb.debug(str<>("HP/BP add_new")
+                    nq_deb.debug(ffmt<s20>("HP/BP add_new")
                         , "added", ffmt<dec3>(added)
                         , "D", ffmt<dec3>(domain_)
                         , "Q",  ffmt<dec3>(q)
@@ -183,7 +183,7 @@ namespace pika::threads::detail {
                 if (added > 0)
                 {
                     // clang-format off
-                    nq_deb.debug(str<>("add_new")
+                    nq_deb.debug(ffmt<s20>("add_new")
                          , "added", ffmt<dec3>(added)
                          , "D", ffmt<dec3>(domain_)
                          , "Q",  ffmt<dec3>(q)

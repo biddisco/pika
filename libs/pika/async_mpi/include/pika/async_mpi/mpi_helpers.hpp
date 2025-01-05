@@ -101,7 +101,7 @@ namespace pika::mpi::experimental::detail {
         detail::add_request_callback(
             [&op_state](int status) mutable {
                 PIKA_DETAIL_DP(
-                    mpi_tran<5>, debug(str<>("callback_void_suspend_resume"), "status", status));
+                    mpi_tran<5>, debug(ffmt<s20>("callback_void_suspend_resume"), "status", status));
                 // wake up the suspended thread
                 {
                     std::lock_guard lk(op_state.mutex);
@@ -122,7 +122,7 @@ namespace pika::mpi::experimental::detail {
     {
         detail::add_request_callback(
             [&op_state](int status) mutable {
-                PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("schedule_task_callback")));
+                PIKA_DETAIL_DP(mpi_tran<5>, debug(ffmt<s20>("schedule_task_callback")));
                 if (status != MPI_SUCCESS)
                 {
                     ex::set_error(std::move(op_state.receiver),
@@ -137,7 +137,7 @@ namespace pika::mpi::experimental::detail {
                         execution::thread_priority::normal;
                     auto snd0 =
                         ex::schedule(default_pool_scheduler(p)) | ex::then([&op_state]() mutable {
-                            PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("set_value")));
+                            PIKA_DETAIL_DP(mpi_tran<5>, debug(ffmt<s20>("set_value")));
                             ex::set_value(std::move(op_state.receiver));
                         });
                     ex::start_detached(std::move(snd0));
@@ -155,7 +155,7 @@ namespace pika::mpi::experimental::detail {
     {
         detail::add_request_callback(
             [&op_state](int status) mutable {
-                PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("callback_void")));
+                PIKA_DETAIL_DP(mpi_tran<5>, debug(ffmt<s20>("callback_void")));
                 set_value_error_helper(status, std::move(op_state.receiver));
             },
             op_state.request);
@@ -167,7 +167,7 @@ namespace pika::mpi::experimental::detail {
     template <typename OperationState>
     int mpix_callback_resume([[maybe_unused]] int rc, void* cb_data)
     {
-        PIKA_DETAIL_DP(mpi_tran<1>, debug(str<>("MPIX"), "callback triggered"));
+        PIKA_DETAIL_DP(mpi_tran<1>, debug(ffmt<s20>("MPIX"), "callback triggered"));
         auto& op_state = *static_cast<OperationState*>(cb_data);
         // wake up the suspended thread
         {
@@ -186,7 +186,7 @@ namespace pika::mpi::experimental::detail {
     template <typename OperationState>
     int mpix_callback_continuation([[maybe_unused]] int rc, void* cb_data)
     {
-        PIKA_DETAIL_DP(mpi_tran<1>, debug(str<>("MPIX"), "callback triggered"));
+        PIKA_DETAIL_DP(mpi_tran<1>, debug(ffmt<s20>("MPIX"), "callback triggered"));
         auto& op_state = *static_cast<OperationState*>(cb_data);
         set_value_error_helper(op_state.status, std::move(op_state.receiver));
         // tell mpix that we handled it ok, error is passed into set_error in mpi_trigger

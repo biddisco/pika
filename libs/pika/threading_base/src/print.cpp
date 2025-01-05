@@ -24,8 +24,8 @@ namespace pika::debug::detail {
 
     std::ostream& operator<<(std::ostream& os, threadinfo<threads::detail::thread_data*> const& d)
     {
-        os << fmt::ptr(d.data) << " \"" << ((d.data != nullptr) ? d.data->get_description() : "nullptr")
-           << "\"";
+        os << fmt::ptr(d.data) << " \""
+           << ((d.data != nullptr) ? d.data->get_description() : "nullptr") << "\"";
         return os;
     }
 
@@ -80,8 +80,7 @@ namespace pika::debug::detail {
                 auto* p = get_thread_id_data(tid)->get_scheduler_base()->get_parent_pool();
                 pool = p->get_pool_name().c_str();
             }
-            os << std::this_thread::get_id() << " "
-               << debug::detail::str<8>(pool)
+            os << std::this_thread::get_id() << " " << ffmt<s8>(pool)
 
 #ifdef PIKA_DEBUGGING_PRINT_LINUX
                << " cpu " << ffmt<dec3>(sched_getcpu()) << " ";

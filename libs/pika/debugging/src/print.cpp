@@ -192,7 +192,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
 
     std::ostream& operator<<(std::ostream& os, hostname_print_helper const& h)
     {
-        os << str<13>(h.get_hostname_and_rank()) << " ";
+        os << ffmt<s12>(h.get_hostname_and_rank()) << " ";
         return os;
     }
 
@@ -200,7 +200,7 @@ namespace PIKA_DETAIL_NS_DEBUG {
     template <typename T>
     PIKA_EXPORT void print_array(std::string const& name, T const* data, std::size_t size)
     {
-        std::cout << str<20>(name.c_str()) << ": {" << ffmt<dec4>(size) << "} : ";
+        std::cout << ffmt<s20>(name.c_str()) << ": {" << ffmt<dec4>(size) << "} : ";
         std::copy(data, data + size, std::ostream_iterator<T>(std::cout, ", "));
         std::cout << "\n";
     }

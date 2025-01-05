@@ -98,8 +98,8 @@ int main()
 
     // ---------------------------------------------------------
     // Test that timed log messages behave as expected
-    static auto t_enabled = p_enabled.make_timer(1, str<>("Timed (enabled)"));
-    static auto t_disabled = p_disabled.make_timer(1, str<>("Timed (disabled)"));
+    static auto t_enabled = p_enabled.make_timer(1, ffmt<s20>("Timed (enabled)"));
+    static auto t_disabled = p_disabled.make_timer(1, ffmt<s20>("Timed (disabled)"));
 
     // run a loop for 2 seconds with a timed print every 1 sec
     auto start = std::chrono::system_clock::now();

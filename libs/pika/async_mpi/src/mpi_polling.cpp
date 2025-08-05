@@ -298,7 +298,12 @@ namespace pika::mpi::experimental {
         {
             int flag;
             MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
-            if (flag) { PIKA_DETAIL_DP(mpi_debug<5>, debug(str<>("poll MPI_Test ok"), req)); }
+            if (flag)
+            {
+                PIKA_DETAIL_DP(mpi_debug<5>,
+                    debug(str<>("poll MPI_Test ok"), ptr(req), "MPI_REQUEST_NULL",
+                        bool(req == MPI_REQUEST_NULL)));
+            }
             return flag;
         }
 

@@ -117,11 +117,14 @@ namespace pika::mpi::experimental {
             ///
             /// * unspecified : reserved for development purposes or for customization by an
             /// application using pika
-            yield_while = 0b0000'0000,                                          // 0x00, 00 -> 7
-            suspend_resume = 0b0000'1000,                                       // 0x08, 08 -> 15
-            new_task = 0b0001'0000,                                             // 0x10, 16 -> 23
-            continuation = 0b0001'1000,                                         // 0x18, 24 -> 31
+            // clang-format off
+            yield_while       = 0b0000'0000,                                    // 0x00, 00 -> 7
+            suspend_resume    = 0b0000'1000,                                    // 0x08, 08 -> 15
+            new_task          = 0b0001'0000,                                    // 0x10, 16 -> 23
+            continuation      = 0b0001'1000,                                    // 0x18, 24 -> 31
             mpix_continuation = 0b0010'0000,                                    // 0x20, 32 -> 39
+            blocking          = 0b0011'0000,                                    // 0x28, invalid
+            // clang-format on
             default_mode = continuation + completion_inline + high_priority,    // 24 + 2 + 4 = 30
         };
 
@@ -158,6 +161,7 @@ namespace pika::mpi::experimental {
             case handler_method::continuation: return "continuation";
             case handler_method::suspend_resume: return "suspend_resume";
             case handler_method::mpix_continuation: return "mpix_continuation";
+            case handler_method::blocking: return "blocking";
             default: return "invalid";
             }
         }

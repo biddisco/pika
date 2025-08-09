@@ -59,7 +59,7 @@ namespace pika::mpi::experimental {
         // by convention the title is 7 chars (for alignment)
         // a debug level of N shows messages with level 1..N
         template <int Level>
-        inline constexpr debug::detail::print_threshold<Level, 0> mpi_debug("MPIPOLL");
+        inline constexpr debug::detail::print_threshold<Level, 9> mpi_debug("MPIPOLL");
 
         constexpr std::uint32_t max_poll_requests = 32;
 
@@ -76,23 +76,9 @@ namespace pika::mpi::experimental {
         /// called when the operation tied to the request handle completes.
         struct request_callback
         {
-            MPI_Request request_;
-            request_callback_function_type callback_function_;
-        };
-
-        // -----------------------------------------------------------------
-        struct mpi_callback_info
-        {
-            request_callback_function_type cb_;
-            std::int32_t err_;
-            MPI_Request request_;
-        };
-
-        struct ready_callback
-        {
             request_callback_function_type cb_;
             MPI_Request request_;
-            std::int32_t err_;
+            std::int32_t status_;
         };
 
         // -----------------------------------------------------------------
@@ -103,7 +89,7 @@ namespace pika::mpi::experimental {
         /// into a vector that is passed to the mpi test function
         using request_callback_queue_type = concurrency::detail::ConcurrentQueue<request_callback>;
         //
-        using request_ready_queue_type = concurrency::detail::ConcurrentQueue<ready_callback>;
+        using request_ready_queue_type = concurrency::detail::ConcurrentQueue<request_callback>;
 
         // -----------------------------------------------------------------
         /// Spinlock is used as it can be called by OS threads or pika tasks
@@ -133,7 +119,7 @@ namespace pika::mpi::experimental {
             request_ready_queue_type ready_requests_;
             //
             std::vector<MPI_Request> requests_;
-            std::vector<mpi_callback_info> callbacks_;
+            std::vector<request_callback> callbacks_;
 
             // mutex needed to protect mpi request vector, note that the
             // mpi poll function usually takes place inside the main scheduling loop
@@ -186,7 +172,7 @@ namespace pika::mpi::experimental {
         }
 
         // -----------------------------------------------------------------
-        // When debugging, it might be useful to know how many
+        // When debugging, it can be useful to know how many
         // MPI_REQUEST_NULL messages are currently in our vector
         inline size_t get_num_null_requests_in_vector()
         {
@@ -214,6 +200,9 @@ namespace pika::mpi::experimental {
         // -----------------------------------------------------------------
         std::size_t get_completion_mode_default()
         {
+            auto N = pika::detail::get_env_var_as<std::size_t>("PIKA_MPI_COMPLETION_MODE",
+                pika::detail::to_underlying(handler_method::default_mode));
+            std::cout << "Default initialization of mode is " << N << std::endl;
             return pika::detail::get_env_var_as<std::size_t>("PIKA_MPI_COMPLETION_MODE",
                 pika::detail::to_underlying(handler_method::default_mode));
         }
@@ -221,12 +210,12 @@ namespace pika::mpi::experimental {
         // -----------------------------------------------------------------
         /// used internally to add a request to the main polling vector passed to MPI_Testany.
         /// This is only called inside the polling function when a lock is held,
-        /// so only one thread at a time ever enters here
+        /// so only one thread at a time ever enters here (and hence we don't need to worry
+        /// about a race when the two vectors are changed independently)
         inline void add_to_request_callback_vector(request_callback&& req_callback)
         {
             mpi_data_.requests_.push_back(req_callback.request_);
-            mpi_data_.callbacks_.push_back(
-                {std::move(req_callback.callback_function_), MPI_SUCCESS, req_callback.request_});
+            mpi_data_.callbacks_.push_back(std::move(req_callback));
 
             PIKA_DETAIL_DP(mpi_debug<5>,
                 debug(str<>("CB queue => vector"), mpi_data_, ptr(req_callback.request_), "nulls",
@@ -236,7 +225,7 @@ namespace pika::mpi::experimental {
         // -----------------------------------------------------------------
         /// used internally to add an MPI_Request to the lockfree queue that will be used
         /// by the polling routines to check when requests have completed
-        void add_to_request_callback_queue(request_callback&& req_callback)
+        inline void add_to_request_callback_queue(request_callback&& req_callback)
         {
             pika::threads::detail::increment_global_activity_count();
             ++mpi_data_.all_in_flight_;
@@ -262,10 +251,12 @@ namespace pika::mpi::experimental {
         // -------------------------------------------------------------
         bool add_request_callback(request_callback_function_type&& callback, MPI_Request request)
         {
+#if defined(PIKA_DEBUG)
             PIKA_ASSERT_MSG(get_register_polling_count() != 0,
                 "MPI event polling has not been enabled on any pool. Make sure that MPI event "
                 "polling is enabled on at least one thread pool.");
-            add_to_request_callback_queue(request_callback{request, std::move(callback)});
+#endif
+            add_to_request_callback_queue({std::move(callback), request, MPI_SUCCESS});
             return true;
         }
 
@@ -294,16 +285,12 @@ namespace pika::mpi::experimental {
             MPI_Comm_set_errhandler(MPI_COMM_WORLD, detail::pika_mpi_errhandler);
         }
 
+        // -------------------------------------------------------------
         bool poll_request(MPI_Request req)
         {
             int flag;
             MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
-            if (flag)
-            {
-                PIKA_DETAIL_DP(mpi_debug<5>,
-                    debug(str<>("poll MPI_Test ok"), ptr(req), "MPI_REQUEST_NULL",
-                        bool(req == MPI_REQUEST_NULL)));
-            }
+            if (flag) { PIKA_DETAIL_DP(mpi_debug<5>, debug(str<>("poll MPI_Test ok"), ptr(req))); }
             return flag;
         }
 
@@ -382,9 +369,62 @@ namespace pika::mpi::experimental {
 #endif
 
         // -------------------------------------------------------------
+        // template <typename Callback>
+        inline void invoke_ready_callback(
+            request_callback& ready_callback, std::int32_t status, char const* msg)
+        {
+#ifdef PIKA_HAVE_APEX
+            apex::scoped_timer apex_invoke("pika::mpi::trigger");
+#endif
+            PIKA_DETAIL_DP(mpi_debug<4>, debug(str<>(msg), ptr(ready_callback.request_), status));
+            // decrement before invoking callback : otherwise race if invoked code uses in_flight
+            --mpi_data_.all_in_flight_;
+            PIKA_INVOKE(std::move(ready_callback.cb_), status);
+            pika::threads::detail::decrement_global_activity_count();
+        }
+
+        // -------------------------------------------------------------
+        inline void trigger_callbacks(char const* msg)
+        {
+            request_callback ready_callback_;
+            while (mpi_data_.ready_requests_.try_dequeue(ready_callback_))
+            {
+                invoke_ready_callback(ready_callback_, ready_callback_.status_, msg);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // Move requests in the queue (not yet polled) into the polling vector ...
+        // Number in_flight does not change - move from queue to vector
+        // this should be called under lock from the polling routines
+        inline void move_requests_from_queue_to_vector()
+        {
+            request_callback req_callback;
+            while (mpi_data_.request_callback_queue_.try_dequeue(req_callback))
+            {
+                add_to_request_callback_vector(std::move(req_callback));
+            }
+        }
+
+        // -------------------------------------------------------------
+        // creates a scoped timer block with debug message every N seconds
+        inline void timer_heartbeat(char const* msg)
+        {
+            int const LEVEL = 0;
+            int const seconds = 1;
+            if constexpr (mpi_debug<LEVEL>.is_enabled())
+            {
+                // for debugging, create a timer : debug info every N seconds
+                static auto poll_deb = mpi_debug<LEVEL>.make_timer(
+                    seconds, debug::detail::str<>("Poll heartbeat"), msg);
+                PIKA_DETAIL_DP(mpi_debug<LEVEL>, timed(poll_deb, mpi_data_));
+            }
+        }
+
+        // -------------------------------------------------------------
         // Background progress function for MPI async operations
         // Checks for completed MPI_Requests and readies sender when complete
-        pika::threads::detail::polling_status poll_multithreaded()
+        PIKA_EXPORT pika::threads::detail::polling_status poll_multithreaded()
         {
             using pika::threads::detail::polling_status;
 
@@ -392,21 +432,7 @@ namespace pika::mpi::experimental {
             // If a thread is already polling and found a completion,
             // it first places it on the ready requests queue and any thread
             // can invoke the callback without being under lock
-            ready_callback ready_callback_;
-            while (mpi_data_.ready_requests_.try_dequeue(ready_callback_))
-            {
-#ifdef PIKA_HAVE_APEX
-                apex::scoped_timer apex_invoke("pika::mpi::trigger");
-#endif
-                PIKA_DETAIL_DP(mpi_debug<4>,
-                    debug(str<>("Ready CB invoke"), ptr(ready_callback_.request_),
-                        ready_callback_.err_));
-
-                // decrement before invoking callback : race if invoked code checks in_flight
-                --mpi_data_.all_in_flight_;
-                PIKA_INVOKE(std::move(ready_callback_.cb_), ready_callback_.err_);
-                pika::threads::detail::decrement_global_activity_count();
-            }
+            trigger_callbacks("Ready CB multithread invoke");
 
             // if we think there are no outstanding requests, then exit quickly
             if (mpi_data_.all_in_flight_.load(std::memory_order_relaxed) == 0)
@@ -414,46 +440,23 @@ namespace pika::mpi::experimental {
 
             // start a scoped block where the polling lock is held
             {
-#ifdef PIKA_HAVE_APEX
-                //apex::scoped_timer apex_poll("pika::mpi::poll");
-#endif
                 std::unique_lock<mutex_type> lk(mpi_data_.polling_vector_mtx_, std::try_to_lock);
                 if (!lk.owns_lock())
                 {
-                    if constexpr (mpi_debug<5>.is_enabled())
-                    {
-                        // for debugging, create a timer : debug info every N seconds
-                        static auto poll_deb =
-                            mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock failed"));
-                        PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
-                    }
+                    timer_heartbeat("multithread lock fail");
                     return polling_status::idle;
                 }
-
-                if constexpr (mpi_debug<5>.is_enabled())
-                {
-                    // for debugging, create a timer : debug info every N seconds
-                    static auto poll_deb =
-                        mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock success"));
-                    PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
-                }
+                timer_heartbeat("multithread lock success");
+#ifdef PIKA_HAVE_APEX
+                //apex::scoped_timer apex_poll("pika::mpi::poll");
+#endif
 
                 bool event_handled;
                 do {
                     event_handled = false;
-
-                    // Move requests in the queue (that have not yet been polled for)
-                    // into the polling vector ...
-                    // Number in_flight does not change during this section as one
-                    // is moved off the queue and into the vector
-                    request_callback req_callback;
-                    while (mpi_data_.request_callback_queue_.try_dequeue(req_callback))
-                    {
-                        add_to_request_callback_vector(std::move(req_callback));
-                    }
+                    move_requests_from_queue_to_vector();
 
                     std::uint32_t vsize = mpi_data_.requests_.size();
-
                     int num_completed = 0;
                     // do we poll for N requests at a time, or just 1
                     if (mpi_data_.max_polling_requests.load(std::memory_order_relaxed) > 1)
@@ -484,14 +487,18 @@ namespace pika::mpi::experimental {
                                 // for each completed request
                                 for (int i = 0; i < num_completed; ++i)
                                 {
-                                    size_t index = indices_vector_[i];
+                                    size_t const index = indices_vector_[i];
                                     mpi_data_.ready_requests_.enqueue(
                                         {std::move(mpi_data_.callbacks_[req_init + index].cb_),
                                             mpi_data_.callbacks_[req_init + index].request_,
                                             status_valid ? status_vector_[i].MPI_ERROR :
                                                            MPI_SUCCESS});
-                                    // Remove the request from our vector to prevent retesting
-                                    mpi_data_.requests_[req_init + index] = MPI_REQUEST_NULL;
+                                    if (mpi_data_.requests_[req_init + index] != MPI_REQUEST_NULL)
+                                    {
+                                        // Remove the request from our vector to prevent retesting
+                                        mpi_data_.requests_[req_init + index] = MPI_REQUEST_NULL;
+                                        throw std::runtime_error("MPI should set MPI_REQUEST_NULL");
+                                    }
                                 }
                             }
                             vsize -= req_size;
@@ -500,18 +507,17 @@ namespace pika::mpi::experimental {
                     }
                     else
                     {
+                        // MPI_Testany sets completed request to MPI_REQUEST_NULL
                         int rindex, flag;
                         int status = MPI_Testany(mpi_data_.requests_.size(),
                             mpi_data_.requests_.data(), &rindex, &flag, MPI_STATUS_IGNORE);
                         if (rindex != MPI_UNDEFINED)
                         {
-                            size_t index = static_cast<size_t>(rindex);
-                            event_handled = true;
+                            size_t const& index = static_cast<size_t>(rindex);
                             mpi_data_.ready_requests_.enqueue(
                                 {std::move(mpi_data_.callbacks_[index].cb_),
                                     mpi_data_.callbacks_[index].request_, status});
-                            // Remove the request from our vector to prevent retesting
-                            mpi_data_.requests_[index] = MPI_REQUEST_NULL;
+                            event_handled = true;
                         }
                     }
                 } while (event_handled == true);
@@ -520,28 +526,10 @@ namespace pika::mpi::experimental {
                 compact_vectors();
             }    // end lock scope block
 
-            // output a debug heartbeat every N seconds
-            if constexpr (mpi_debug<4>.is_enabled())
-            {
-                static auto poll_deb =
-                    mpi_debug<4>.make_timer(1, debug::detail::str<>("Poll - success"));
-                PIKA_DETAIL_DP(mpi_debug<4>, timed(poll_deb, mpi_data_));
-            }
+            // if enabled : output a debug heartbeat every N seconds
+            timer_heartbeat("multithread complete");
 
-            // invoke (new) ready callbacks without being under lock
-            while (mpi_data_.ready_requests_.try_dequeue(ready_callback_))
-            {
-#ifdef PIKA_HAVE_APEX
-                apex::scoped_timer apex_invoke("pika::mpi::trigger");
-#endif
-                PIKA_DETAIL_DP(mpi_debug<5>,
-                    debug(str<>("CB invoke"), ptr(ready_callback_.request_), ready_callback_.err_));
-
-                // decrement before invoking callback : race if invoked code checks in_flight
-                --mpi_data_.all_in_flight_;
-                PIKA_INVOKE(std::move(ready_callback_.cb_), ready_callback_.err_);
-                pika::threads::detail::decrement_global_activity_count();
-            }
+            trigger_callbacks("CB multithread invoke");
 
             return mpi_data_.all_in_flight_.load(std::memory_order_relaxed) == 0 ?
                 polling_status::idle :
@@ -559,63 +547,82 @@ namespace pika::mpi::experimental {
             if (mpi_data_.all_in_flight_.load(std::memory_order_relaxed) == 0)
                 return polling_status::idle;
 
+            timer_heartbeat("singlethread lock free");
 #ifdef PIKA_HAVE_APEX
-                //apex::scoped_timer apex_poll("pika::mpi::poll");
+            //apex::scoped_timer apex_poll("pika::mpi::poll");
 #endif
-            if constexpr (mpi_debug<5>.is_enabled())
+
+            move_requests_from_queue_to_vector();
+
+            int rindex, flag;    // Test_any sets completed request to MPI_REQUEST_NULL
+            int status = MPI_Testany(mpi_data_.requests_.size(), mpi_data_.requests_.data(),
+                &rindex, &flag, MPI_STATUS_IGNORE);
+            if (rindex != MPI_UNDEFINED)
             {
-                // for debugging, create a timer : debug info every N seconds
-                static auto poll_deb =
-                    mpi_debug<5>.make_timer(2, debug::detail::str<>("Poll - lock success"));
-                PIKA_DETAIL_DP(mpi_debug<5>, timed(poll_deb, mpi_data_));
+                invoke_ready_callback(mpi_data_.callbacks_[static_cast<size_t>(rindex)], status,
+                    "CB singlethread invoke");
             }
-
-            bool event_handled;
-            do {
-                event_handled = false;
-
-                // Move unpolled requests in the queue into the polling vector ...
-                request_callback req_callback;
-                while (mpi_data_.request_callback_queue_.try_dequeue(req_callback))
-                {
-                    add_to_request_callback_vector(std::move(req_callback));
-                }
-
-                int rindex, flag;
-                int status = MPI_Testany(mpi_data_.requests_.size(), mpi_data_.requests_.data(),
-                    &rindex, &flag, MPI_STATUS_IGNORE);
-                if (rindex != MPI_UNDEFINED)
-                {
-                    size_t index = static_cast<size_t>(rindex);
-                    event_handled = true;
-
-                    PIKA_DETAIL_DP(mpi_debug<5>,
-                        debug(
-                            str<>("CB invoke"), ptr(mpi_data_.callbacks_[index].request_), status));
-
-                    // Remove the request from our vector to prevent retesting
-                    mpi_data_.requests_[index] = MPI_REQUEST_NULL;
-
-                    // decrement before invoking callback : race if invoked code checks in_flight
-                    --mpi_data_.all_in_flight_;
-                    PIKA_INVOKE(std::move(mpi_data_.callbacks_[index].cb_), status);
-                    pika::threads::detail::decrement_global_activity_count();
-                }
-            } while (event_handled == true);
 
             compact_vectors();
 
-            // output a debug heartbeat every N seconds
-            if constexpr (mpi_debug<4>.is_enabled())
-            {
-                static auto poll_deb =
-                    mpi_debug<4>.make_timer(1, debug::detail::str<>("Poll - success"));
-                PIKA_DETAIL_DP(mpi_debug<4>, timed(poll_deb, mpi_data_));
-            }
+            // if enabled : output a debug heartbeat every N seconds
+            timer_heartbeat("singlethread complete");
 
             return mpi_data_.all_in_flight_.load(std::memory_order_relaxed) == 0 ?
                 polling_status::idle :
                 polling_status::busy;
+        }
+
+        // -------------------------------------------------------------
+        // This polling function should only be called by the blocking mode as no callbacks are
+        // triggered unless they match the request being polled for - however, other requests
+        // that complete are moved onto the ready queues to allow other tasks to make progress
+        PIKA_EXPORT void poll_blocking_mode(MPI_Request blocking_request)
+        {
+            using pika::threads::detail::polling_status;
+
+            // start a scoped block where the polling lock is held
+            {
+                std::unique_lock<mutex_type> lk(mpi_data_.polling_vector_mtx_, std::try_to_lock);
+                if (!lk.owns_lock())
+                {
+                    timer_heartbeat("blocking lock fail");
+                    return;
+                }
+                // if enabled : output a debug heartbeat every N seconds
+                timer_heartbeat("blocking lock success");
+#ifdef PIKA_HAVE_APEX
+                //apex::scoped_timer apex_poll("pika::mpi::poll");
+#endif
+                move_requests_from_queue_to_vector();
+
+                int rindex, flag;
+                // MPI_Testany sets completed request to MPI_REQUEST_NULL
+                int status = MPI_Testany(mpi_data_.requests_.size(), mpi_data_.requests_.data(),
+                    &rindex, &flag, MPI_STATUS_IGNORE);
+                if (rindex != MPI_UNDEFINED)
+                {
+                    size_t const& index = static_cast<size_t>(rindex);
+                    if (mpi_data_.callbacks_[index].request_ == blocking_request)
+                    {
+                        invoke_ready_callback(
+                            mpi_data_.callbacks_[index], status, "CB blocking invoke");
+                    }
+                    else    // if we find a completion for some other request,
+                    {       // process it but do not trigger any continuation
+                        PIKA_DETAIL_DP(detail::mpi_debug<0>,
+                            debug(str<>("blocking"), "DIFFERENT completion", ptr(blocking_request),
+                                ptr(mpi_data_.requests_[index])));
+                        mpi_data_.ready_requests_.enqueue(
+                            {std::move(mpi_data_.callbacks_[index].cb_),
+                                mpi_data_.callbacks_[index].request_, status});
+                    }
+                    // still under lock : remove wasted space filled by completed requests
+                    compact_vectors();
+                }
+            }    // end lock scope block
+
+            timer_heartbeat("blocking complete");
         }
 
         // -------------------------------------------------------------
@@ -640,7 +647,7 @@ namespace pika::mpi::experimental {
             if (mpi_data_.rank_ == 0)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("polling_enabled"), "pool =", pool.get_pool_name(), ", mode",
+                    debug(str<>("polling_enabled"), "pool =", pool.get_pool_name(), "mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
             }
             auto* sched = pool.get_scheduler();
@@ -651,7 +658,7 @@ namespace pika::mpi::experimental {
             if (mpi_data_.single_thread_mode_)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("single_thread_mode_"), "pool =", pool.get_pool_name(), ", mode",
+                    debug(str<>("single_thread_mode_"), "pool =", pool.get_pool_name(), "mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
             }
 #ifdef OMPI_HAVE_MPI_EXT_CONTINUE
@@ -688,8 +695,9 @@ namespace pika::mpi::experimental {
             }
 #endif
             PIKA_DETAIL_DP(mpi_debug<1>,
-                debug(str<>("disable polling"), "pool =", pool.get_pool_name(), ", mode",
-                    mode_string(get_completion_mode()), get_completion_mode()));
+                debug(str<>("disable polling"), "pool =", pool.get_pool_name(), "mode",
+                    get_completion_mode(), bin<8>(get_completion_mode()),
+                    pika::mpi::experimental::detail::mode_string(get_completion_mode())));
             auto* sched = pool.get_scheduler();
             sched->clear_mpi_polling_function();
         }
@@ -702,7 +710,7 @@ namespace pika::mpi::experimental {
             if (detail::get_handler_method(mode) != handler_method::yield_while)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("enabling polling"), "pool =", get_pool_name(), ", mode",
+                    debug(str<>("enabling polling"), "pool =", get_pool_name(), "mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
                 detail::register_polling(pika::resource::get_thread_pool(get_pool_name()));
             }
@@ -780,7 +788,7 @@ namespace pika::mpi::experimental {
             if (detail::get_handler_method(mode) != handler_method::yield_while)
             {
                 PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                    debug(str<>("disabling polling"), "pool =", get_pool_name(), ", mode",
+                    debug(str<>("disabling polling"), "pool =", get_pool_name(), "mode",
                         mode_string(get_completion_mode()), get_completion_mode()));
                 detail::unregister_polling(pika::resource::get_thread_pool(get_pool_name()));
             }
@@ -882,7 +890,11 @@ namespace pika::mpi::experimental {
     }
 
     // -----------------------------------------------------------------
-    size_t get_work_count() { return detail::mpi_data_.all_in_flight_; }
+    size_t get_work_count()
+    {
+        detail::timer_heartbeat("get_work_count");
+        return detail::mpi_data_.all_in_flight_;
+    }
 
     // -----------------------------------------------------------------
     std::size_t get_completion_mode() { return detail::completion_flags_; }
@@ -938,7 +950,7 @@ namespace pika::mpi::experimental {
                 MPI_UNDEFINED, MPI_INFO_NULL, &detail::mpi_data_.mpix_continuations_request));
 
             PIKA_DETAIL_DP(detail::mpi_debug<1>,
-                debug(str<>("MPIX"), "Enabled,", "pool =", get_pool_name(), ", mode",
+                debug(str<>("MPIX"), "Enabled,", "pool =", get_pool_name(), "mode",
                     detail::mode_string(get_completion_mode()), get_completion_mode(),
                     ptr(detail::mpi_data_.mpix_continuations_request)));
             // it is now safe to use the mpix request, {memory_order = not a critical code path}
@@ -996,6 +1008,8 @@ namespace pika::mpi::experimental {
         // clean up if we initialized mpi
         PIKA_DETAIL_DP(detail::mpi_debug<1>, debug(str<>("finalize"), detail::mpi_data_));
         mpi::detail::environment::finalize();
+        PIKA_DETAIL_DP(detail::mpi_debug<1>,
+            debug(str<>("finalize done"), get_work_count(), detail::mpi_data_));
     }
 
 }    // namespace pika::mpi::experimental

@@ -37,7 +37,7 @@ namespace pika::mpi::experimental::detail {
     // -----------------------------------------------------------------
     // by convention the title is 7 chars (for alignment)
     template <int Level>
-    inline constexpr debug::detail::print_threshold<Level, 0> mpi_tran("MPITRAN");
+    inline constexpr debug::detail::print_threshold<Level, 9> mpi_tran("MPITRAN");
 
     // -----------------------------------------------------------------
     namespace ex = pika::execution::experimental;
@@ -160,6 +160,23 @@ namespace pika::mpi::experimental::detail {
                 PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("callback_void")));
                 op_state.ts = {};
                 set_value_error_helper(status, std::move(op_state.r));
+            },
+            op_state.request);
+    }
+
+    // -----------------------------------------------------------------
+    // handler_method::blocking
+    // adds a request callback to the mpi polling code which will simply
+    // set the status flag in the operation state and the blocking code will exit
+    template <typename OperationState>
+    void add_blocking_request_callback(OperationState& op_state)
+    {
+        detail::add_request_callback(
+            [&op_state](int status) mutable {
+                PIKA_DETAIL_DP(
+                    mpi_tran<5>, debug(str<>("callback_blocking"), ptr(op_state.request)));
+                op_state.ts = {};
+                op_state.status = status;
             },
             op_state.request);
     }

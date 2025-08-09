@@ -27,11 +27,17 @@
 #include <pika/mpi_base/mpi_exception.hpp>
 #include <pika/synchronization/condition_variable.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <tuple>
 #include <type_traits>
 #include <utility>
+
+namespace pika::mpi::experimental::detail {
+    extern void poll_blocking_mode(MPI_Request blocking_request);
+    extern pika::threads::detail::polling_status poll_multithreaded();
+}    // namespace pika::mpi::experimental::detail
 
 namespace pika::transform_mpi_detail {
     namespace ex = execution::experimental;
@@ -42,11 +48,12 @@ namespace pika::transform_mpi_detail {
     template <typename Receiver, typename F, typename Sender>
     struct operation_state
     {
+        // these 3 should be passed into constructor
         PIKA_NO_UNIQUE_ADDRESS Receiver r;
         PIKA_NO_UNIQUE_ADDRESS F f;
-
         std::size_t mode_flags;
-        int status{MPI_SUCCESS};
+
+        int volatile status{MPI_SUCCESS};
 
         // these vars are needed by suspend/resume mode
         bool completed{false};
@@ -148,56 +155,100 @@ namespace pika::transform_mpi_detail {
 
             void trigger(receiver& r)
             {
+                using namespace pika::mpi::experimental::detail;
                 // early poll just in case the request completed immediately
-                if (mpi::detail::poll_request(r.op_state.request))
+                if (0 && poll_request(r.op_state.request))
                 {
 #ifdef PIKA_HAVE_APEX
                     apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
                     PIKA_DETAIL_DP(mpi::detail::mpi_tran<7>,
-                        debug(str<>("trigger_mpi_recv"), "eager poll ok", ptr(r.op_state.request)));
+                        debug(str<>("trigger"), "eager poll ok", ptr(r.op_state.request)));
                     ex::set_value(std::move(r.op_state.r));
                     return;
                 }
 
                 // which polling/testing mode are we using
-                mpi::detail::handler_method mode =
-                    mpi::detail::get_handler_method(r.op_state.mode_flags);
-                execution::thread_priority p =
-                    mpi::detail::use_priority_boost(r.op_state.mode_flags) ?
+                handler_method mode = get_handler_method(r.op_state.mode_flags);
+                execution::thread_priority p = use_priority_boost(r.op_state.mode_flags) ?
                     execution::thread_priority::boost :
                     execution::thread_priority::normal;
 
-                PIKA_DETAIL_DP(mpi::detail::mpi_tran<5>,
-                    debug(str<>("trigger_mpi_recv"), "set_value_t", "req", ptr(r.op_state.request),
-                        "flags", bin<8>(r.op_state.mode_flags),
+                PIKA_DETAIL_DP(mpi_tran<5>,
+                    debug(str<>("trigger"), "set_value_t", "req", ptr(r.op_state.request), "flags",
+                        bin<8>(r.op_state.mode_flags),
                         mpi::detail::mode_string(r.op_state.mode_flags)));
 
                 switch (mode)
                 {
-                case mpi::detail::handler_method::yield_while:
+                case handler_method::yield_while:
                 {
                     // yield/while is invalid on a non pika thread
                     PIKA_ASSERT(pika::threads::detail::get_self_id());
+                    // @TODO fix handling of errors in simple MPI_Test
                     pika::util::yield_while(
                         [&r]() { return !mpi::detail::poll_request(r.op_state.request); },
                         "trigger_mpi wait for request");
 #ifdef PIKA_HAVE_APEX
                     apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
-                    // we just assume the return from mpi_test is always MPI_SUCCESS
                     ex::set_value(std::move(r.op_state.r));
                     break;
                 }
-                case mpi::detail::handler_method::suspend_resume:
+                case handler_method::blocking:
+                {
+                    // ---------------------------------------
+                    // special case : if program was started with yield_while mode
+                    // we should just do a true blocking check as polling loop is inactive
+                    if (get_handler_method(mpi::get_completion_mode()) ==
+                        handler_method::yield_while)
+                    {    // @TODO fix handling of errors in simple MPI_Test
+                        while (!mpi::detail::poll_request(r.op_state.request)) {}
+                        ex::set_value(std::move(r.op_state.r));
+                        PIKA_DETAIL_DP(mpi::detail::mpi_tran<0>,
+                            debug(str<>("blocking"), "bypass mode", ptr(r.op_state.request)));
+                        break;
+                    }
+
+                    // ---------------------------------------
+                    // blocking mode with periodic processing of callbacks
+                    // The callback will simply reset the status to MPI_SUCCESS/FAIL
+                    r.op_state.status = -1;    // invalid code
+                    mpi::detail::add_blocking_request_callback(r.op_state);
+                    // every N-milliseconds we will allow background work to run
+                    auto now = std::chrono::system_clock::now();
+                    auto timepoint = now + std::chrono::milliseconds(500);
+                    while (r.op_state.status == -1)
+                    {
+                        poll_blocking_mode(r.op_state.request);
+                        if (r.op_state.status != -1) break;
+
+                        if ((now = std::chrono::system_clock::now()) > timepoint)
+                        {
+                            // process other blocking requests to reduce deadlocks
+                            poll_multithreaded();
+                            timepoint = now + std::chrono::milliseconds(500);
+                        }
+                    }
+
+                    PIKA_DETAIL_DP(
+                        mpi_tran<0>, debug(str<>("blocking"), "success", ptr(r.op_state.request)));
+#ifdef PIKA_HAVE_APEX
+                    apex::scoped_timer apex_invoke("pika::mpi::trigger");
+#endif
+                    // call set_value/set_error depending on mpi return status
+                    set_value_error_helper(r.op_state.status, std::move(r.op_state.r));
+                    break;
+                }
+                case handler_method::suspend_resume:
                 {
                     // suspend is invalid on a non pika thread
                     PIKA_ASSERT(pika::threads::detail::get_self_id());
-                    // the callback will resume _this_ thread
+                    // the callback will resume _this_ thread/task
                     {
                         std::unique_lock l{r.op_state.mutex};
-                        mpi::detail::add_suspend_resume_request_callback(r.op_state);
-                        if (mpi::detail::use_priority_boost(r.op_state.mode_flags))
+                        add_suspend_resume_request_callback(r.op_state);
+                        if (use_priority_boost(r.op_state.mode_flags))
                         {
                             threads::detail::thread_data::scoped_thread_priority set_restore(p);
                             r.op_state.cond_var.wait(l, [&]() { return r.op_state.completed; });
@@ -212,31 +263,30 @@ namespace pika::transform_mpi_detail {
                     apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif
                     // call set_value/set_error depending on mpi return status
-                    mpi::detail::set_value_error_helper(r.op_state.status, std::move(r.op_state.r));
+                    set_value_error_helper(r.op_state.status, std::move(r.op_state.r));
                     break;
                 }
-                case mpi::detail::handler_method::new_task:
+                case handler_method::new_task:
                 {
                     // The callback will call set_value/set_error inside a new task
                     // and execution will continue on that thread
-                    mpi::detail::add_new_task_request_callback(r.op_state);
+                    add_new_task_request_callback(r.op_state);
                     break;
                 }
-                case mpi::detail::handler_method::continuation:
+                case handler_method::continuation:
                 {
                     // The callback will call set_value/set_error
                     // execution will continue on the callback thread
-                    mpi::detail::add_continuation_request_callback(r.op_state);
+                    add_continuation_request_callback(r.op_state);
                     break;
                 }
-                case mpi::detail::handler_method::mpix_continuation:
+                case handler_method::mpix_continuation:
                 {
-                    PIKA_DETAIL_DP(mpi::detail::mpi_tran<1>,
+                    PIKA_DETAIL_DP(mpi_tran<1>,
                         debug(str<>("MPI_EXT_CONTINUE"), "register_mpix_continuation",
                             ptr(r.op_state.request), ptr(r.op_state.request)));
-                    mpi::detail::MPIX_Continue_cb_function* func =
-                        &mpi::detail::mpix_callback_continuation<operation_state>;
-                    mpi::detail::register_mpix_continuation(&r.op_state.request, func, &r.op_state);
+                    MPIX_Continue_cb_function* func = &mpix_callback_continuation<operation_state>;
+                    register_mpix_continuation(&r.op_state.request, func, &r.op_state);
                     break;
                 }
                 default: PIKA_UNREACHABLE;
@@ -244,9 +294,8 @@ namespace pika::transform_mpi_detail {
             }
 
             // receive the MPI function invocable + arguments and add a request,
-            // then invoke the mpi function with the added request
-            // if the invocation gives an error, set_error
-            // otherwise return the request by passing it to set_value
+            // then invoke the mpi function with the request.
+            // If the invocation gives an error, set_error otherwise set_value
             template <typename... Ts,
                 typename = std::enable_if_t<mpi::detail::is_mpi_request_invocable_v<F, Ts...>>>
             constexpr void set_value(Ts&&... ts) && noexcept
@@ -255,13 +304,16 @@ namespace pika::transform_mpi_detail {
 
                 pika::detail::try_catch_exception_ptr(
                     [&]() mutable {
-                        using ts_element_type = std::tuple<std::decay_t<Ts>...>;
-                        r.op_state.ts.template emplace<ts_element_type>(std::forward<Ts>(ts)...);
-
                         PIKA_DETAIL_DP(mpi::detail::mpi_tran<5>,
                             debug(str<>("transform_mpi_recv"), "set_value_t"));
 
+                        // move all the arguments we received into the operation state
+                        using ts_element_type = std::tuple<std::decay_t<Ts>...>;
+                        r.op_state.ts.template emplace<ts_element_type>(std::forward<Ts>(ts)...);
+
+                        // execute the MPI call and get given a request
                         dispatch<Ts...>(r);
+                        // test for completion and call set_value via whatever callback is set
                         trigger(r);
                     },
                     [&](std::exception_ptr ep) {
@@ -276,13 +328,15 @@ namespace pika::transform_mpi_detail {
         operation_state_type op_state;
 
         template <typename Receiver_, typename F_, typename Sender_>
-        operation_state(Receiver_&& r, F_&& f, std::size_t flags, Sender_&& sender)
+        operation_state(Receiver_&& r, F_&& f, std::size_t mode, Sender_&& sender)
           : r(std::forward<Receiver_>(r))
           , f(std::forward<F_>(f))
-          , mode_flags{flags}
+          , mode_flags{mode}
           , op_state(ex::connect(std::forward<Sender_>(sender), receiver{*this}))
         {
-            PIKA_DETAIL_DP(mpi::detail::mpi_tran<5>, debug(str<>("operation_state")));
+            PIKA_DETAIL_DP(mpi::detail::mpi_tran<5>,
+                debug(str<>("operation_state"), mode_flags, bin<8>(mode_flags),
+                    mpi::detail::mode_string(mode_flags)));
         }
 
         void start() & noexcept { return ex::start(op_state); }
@@ -324,18 +378,17 @@ namespace pika::transform_mpi_detail {
         static constexpr bool sends_done = false;
 
         template <typename Receiver>
-        constexpr auto connect(Receiver&& receiver) const&
+        constexpr auto connect(Receiver&& r) const&
         {
             return operation_state<std::decay_t<Receiver>, F, Sender>(
-                std::forward<Receiver>(receiver), f, completion_mode_flags, sender);
+                std::forward<Receiver>(r), sender, completion_mode_flags, sender);
         }
 
         template <typename Receiver>
-        constexpr auto connect(Receiver&& receiver) &&
+        constexpr auto connect(Receiver&& r) &&
         {
             return operation_state<std::decay_t<Receiver>, F, Sender>(
-                std::forward<Receiver>(receiver), std::move(f), completion_mode_flags,
-                std::move(sender));
+                std::forward<Receiver>(r), std::move(f), completion_mode_flags, std::move(sender));
         }
     };
 
@@ -350,7 +403,8 @@ namespace pika::mpi::experimental {
             PIKA_CONCEPT_REQUIRES_(
                 pika::execution::experimental::is_sender_v<std::decay_t<Sender>>)>
         friend PIKA_FORCEINLINE pika::execution::experimental::unique_any_sender<>
-        tag_fallback_invoke(transform_mpi_t, Sender&& sender, F&& f)
+        tag_fallback_invoke(
+            transform_mpi_t, Sender&& sender, F&& f, std::size_t mode = get_completion_mode())
         {
             using namespace pika::mpi::experimental::detail;
             PIKA_DETAIL_DP(mpi_tran<5>, debug(str<>("transform_mpi_t"), "tag_fallback_invoke"));
@@ -360,7 +414,6 @@ namespace pika::mpi::experimental {
             using pika::execution::experimental::unique_any_sender;
 
             // get mpi completion mode settings
-            std::size_t mode = get_completion_mode();
             bool completions_inline = use_inline_completion(mode);
             bool requests_inline = use_inline_request(mode);
 
@@ -388,10 +441,12 @@ namespace pika::mpi::experimental {
         // tag invoke overload for mpi_transform
         //
         template <typename F>
-        friend constexpr PIKA_FORCEINLINE auto tag_fallback_invoke(transform_mpi_t, F&& f)
+        friend constexpr PIKA_FORCEINLINE auto
+        tag_fallback_invoke(transform_mpi_t, F&& f, std::size_t mode = get_completion_mode())
         {
-            return pika::execution::experimental::detail::partial_algorithm<transform_mpi_t, F>{
-                std::forward<F>(f)};
+            //            std::uint32_t mode_flags = pika::detail::to_underlying(mode);
+            return pika::execution::experimental::detail::partial_algorithm<transform_mpi_t, F,
+                std::size_t>{std::forward<F>(f), mode};
         }
 
     } transform_mpi{};

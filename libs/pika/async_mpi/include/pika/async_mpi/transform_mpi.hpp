@@ -232,7 +232,7 @@ namespace pika::transform_mpi_detail {
                     }
 
                     PIKA_DETAIL_DP(
-                        mpi_tran<0>, debug(str<>("blocking"), "success", ptr(r.op_state.request)));
+                        mpi_tran<6>, debug(str<>("blocking"), "success", ptr(r.op_state.request)));
 #ifdef PIKA_HAVE_APEX
                     apex::scoped_timer apex_invoke("pika::mpi::trigger");
 #endif

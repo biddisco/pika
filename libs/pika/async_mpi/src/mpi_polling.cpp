@@ -59,7 +59,7 @@ namespace pika::mpi::experimental {
         // by convention the title is 7 chars (for alignment)
         // a debug level of N shows messages with level 1..N
         template <int Level>
-        inline constexpr debug::detail::print_threshold<Level, 9> mpi_debug("MPIPOLL");
+        inline constexpr debug::detail::print_threshold<Level, 0> mpi_debug("MPIPOLL");
 
         constexpr std::uint32_t max_poll_requests = 32;
 
@@ -202,7 +202,6 @@ namespace pika::mpi::experimental {
         {
             auto N = pika::detail::get_env_var_as<std::size_t>("PIKA_MPI_COMPLETION_MODE",
                 pika::detail::to_underlying(handler_method::default_mode));
-            std::cout << "Default initialization of mode is " << N << std::endl;
             return pika::detail::get_env_var_as<std::size_t>("PIKA_MPI_COMPLETION_MODE",
                 pika::detail::to_underlying(handler_method::default_mode));
         }
@@ -410,10 +409,10 @@ namespace pika::mpi::experimental {
         // creates a scoped timer block with debug message every N seconds
         inline void timer_heartbeat(char const* msg)
         {
-            int const LEVEL = 0;
-            int const seconds = 1;
+            int const LEVEL = 2;
             if constexpr (mpi_debug<LEVEL>.is_enabled())
             {
+                int const seconds = 1;
                 // for debugging, create a timer : debug info every N seconds
                 static auto poll_deb = mpi_debug<LEVEL>.make_timer(
                     seconds, debug::detail::str<>("Poll heartbeat"), msg);
@@ -610,7 +609,7 @@ namespace pika::mpi::experimental {
                     }
                     else    // if we find a completion for some other request,
                     {       // process it but do not trigger any continuation
-                        PIKA_DETAIL_DP(detail::mpi_debug<0>,
+                        PIKA_DETAIL_DP(detail::mpi_debug<2>,
                             debug(str<>("blocking"), "DIFFERENT completion", ptr(blocking_request),
                                 ptr(mpi_data_.requests_[index])));
                         mpi_data_.ready_requests_.enqueue(

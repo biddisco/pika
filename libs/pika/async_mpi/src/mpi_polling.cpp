@@ -629,7 +629,7 @@ namespace pika::mpi::experimental {
         // then all mpi activities can be done in single threaded lock-free mode
         inline bool can_run_singlethreaded(std::size_t mode)
         {    //
-            return (enable_pool_ && !use_inline_request(mode));
+            return (false && enable_pool_ && !use_inline_request(mode));
         }
 
         // -------------------------------------------------------------
